@@ -1,0 +1,37 @@
+{
+  "name": "super-router",
+  "version": "1.0.0",
+  "description": "Intelligent orchestration system that automatically routes requests to optimal models, agents, and skills",
+  "license": "MIT",
+  "author": "Daniel",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/super-router.git"
+  },
+  "bin": {
+    "super-router": "./bin/install.js"
+  },
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.0"
+  },
+  "files": [
+    "bin/",
+    "skills/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "install": "node bin/install.js"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "routing",
+    "orchestration",
+    "model-selection",
+    "agent",
+    "skill"
+  ]
+}
