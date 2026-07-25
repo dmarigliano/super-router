@@ -17,16 +17,16 @@ Super Router analyzes your request and automatically:
 
 ```bash
 # Unix/Linux/macOS
-curl -fsSL https://raw.githubusercontent.com/yourusername/super-router/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dmarigliano/super-router/main/install.sh | bash
 
 # Windows PowerShell
-irm https://raw.githubusercontent.com/yourusername/super-router/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/dmarigliano/super-router/main/install.ps1 | iex
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/super-router.git
+git clone https://github.com/dmarigliano/super-router.git
 cd super-router
 node bin/install.js
 ```
@@ -186,4 +186,4 @@ MIT
 
 ## Contributing
 
-Issues and PRs welcome at https://github.com/yourusername/super-router
+Issues and PRs welcome at https://github.com/dmarigliano/super-router
