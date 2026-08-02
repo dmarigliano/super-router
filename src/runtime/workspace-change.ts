@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { constants } from "node:fs";
 import { lstat, open, opendir, readlink } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { ProcessRunner } from "../adapters/process-runner.ts";
@@ -37,6 +38,9 @@ const DEFAULT_IGNORED_DIRECTORIES = [
   "node_modules",
   "target",
 ];
+const SUPPORTS_NOFOLLOW = typeof constants.O_NOFOLLOW === "number" && constants.O_NOFOLLOW !== 0;
+const FILE_OPEN_FLAGS =
+  constants.O_RDONLY | constants.O_NONBLOCK | (SUPPORTS_NOFOLLOW ? constants.O_NOFOLLOW : 0);
 
 /**
  * Fingerprints only changed Git paths when possible, so a pre-existing dirty
@@ -224,16 +228,20 @@ export class BoundedWorkspaceChangeDetector implements WorkspaceChangeDetector {
       }
       hash.update("\0path\0").update(relation);
       try {
-        const metadata = await lstat(path);
-        hash.update(`\0${metadata.mode}:${metadata.size}\0`);
-        if (metadata.isSymbolicLink()) {
-          hash.update(await readlink(path));
-        } else if (metadata.isFile()) {
-          const remaining = Math.max(0, this.#maxBytes - bytesHashed);
-          const bytesToRead = Math.min(metadata.size, this.#maxFileBytes, remaining);
-          const buffer = Buffer.alloc(bytesToRead);
-          const handle = await open(path, "r");
-          try {
+        const handle = await open(path, FILE_OPEN_FLAGS);
+        try {
+          const metadata = await handle.stat();
+          hash.update(`\0${metadata.mode}:${metadata.size}\0`);
+          const pathMetadata = SUPPORTS_NOFOLLOW ? undefined : await lstat(path);
+          if (pathMetadata?.isSymbolicLink()) {
+            hash.update("\0symlink\0").update(await readlink(path));
+          } else if (pathMetadata && !sameFile(pathMetadata, metadata)) {
+            complete = false;
+            hash.update("\0changed\0");
+          } else if (metadata.isFile()) {
+            const remaining = Math.max(0, this.#maxBytes - bytesHashed);
+            const bytesToRead = Math.min(metadata.size, this.#maxFileBytes, remaining);
+            const buffer = Buffer.alloc(bytesToRead);
             const { bytesRead } = await handle.read(buffer, 0, bytesToRead, 0);
             hash.update(buffer.subarray(0, bytesRead));
             bytesHashed += bytesRead;
@@ -241,13 +249,23 @@ export class BoundedWorkspaceChangeDetector implements WorkspaceChangeDetector {
               complete = false;
               hash.update(`\0truncated:${metadata.mtimeMs}\0`);
             }
-          } finally {
-            await handle.close();
           }
+        } finally {
+          await handle.close();
         }
       } catch (error) {
-        if (!isMissing(error)) complete = false;
-        hash.update("\0missing\0");
+        if (isNoFollowSymlinkError(error)) {
+          hash.update("\0symlink\0");
+          try {
+            hash.update(await readlink(path));
+          } catch (linkError) {
+            if (!isMissing(linkError)) complete = false;
+            hash.update("\0missing\0");
+          }
+        } else {
+          if (!isMissing(error)) complete = false;
+          hash.update("\0missing\0");
+        }
       }
       filesInspected += 1;
     }
@@ -274,4 +292,17 @@ function changedPaths(status: string): string[] {
 
 function isMissing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+function isNoFollowSymlinkError(error: unknown): boolean {
+  return (
+    error instanceof Error && "code" in error && (error.code === "ELOOP" || error.code === "EMLINK")
+  );
+}
+
+function sameFile(
+  left: { dev: number; ino: number },
+  right: { dev: number; ino: number },
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
 }

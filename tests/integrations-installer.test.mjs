@@ -97,6 +97,28 @@ describe("native integration installer", () => {
     ).rejects.toThrow("symlink path component");
   });
 
+  test("refuses symlinked integration source files", async () => {
+    const repositoryRoot = await temporaryDirectory();
+    const sourceRoot = join(repositoryRoot, "integrations", "codex", "skills", "super-router");
+    await mkdir(join(sourceRoot, "agents"), { recursive: true });
+    await mkdir(join(sourceRoot, "scripts"), { recursive: true });
+    const redirectedSkill = join(repositoryRoot, "redirected-skill.md");
+    await writeFile(redirectedSkill, "redirected\n");
+    await symlink(redirectedSkill, join(sourceRoot, "SKILL.md"), "file");
+    await writeFile(join(sourceRoot, "agents", "openai.yaml"), "interface: {}\n");
+    await writeFile(join(sourceRoot, "scripts", "invoke.mjs"), "export {};\n");
+
+    await expect(
+      runIntegrationCommand({
+        action: "install",
+        integrations: ["codex"],
+        scope: "user",
+        homeDir: repositoryRoot,
+        repositoryRoot,
+      }),
+    ).rejects.toThrow("integration source must be a regular file");
+  });
+
   test("protects modified managed files and preserves unowned files on forced uninstall", async () => {
     const homeDir = await temporaryDirectory();
     const options = {

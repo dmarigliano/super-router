@@ -43,6 +43,20 @@ describe("configuration loading and precedence", () => {
     expect(() => loadConfig(directory)).toThrow("cannot be a symlink");
   });
 
+  test("rejects explicit and environment symlinks without following their targets", async () => {
+    const directory = await temporaryDirectory();
+    const target = await writeJson(directory, "target.json", { profile: "economy" });
+    const explicitLink = join(directory, "explicit-link.json");
+    const environmentLink = join(directory, "environment-link.json");
+    await symlink(target, explicitLink);
+    await symlink(target, environmentLink);
+
+    expect(() => loadConfig(directory, explicitLink)).toThrow("cannot be a symlink");
+
+    process.env.SUPER_ROUTER_CONFIG = environmentLink;
+    expect(() => loadConfig(directory)).toThrow("cannot be a symlink");
+  });
+
   test("returns an isolated clone of secure defaults", async () => {
     delete process.env.SUPER_ROUTER_CONFIG;
     const directory = await temporaryDirectory();

@@ -1,8 +1,144 @@
-// biome-ignore lint/complexity/useRegexLiterals: the escaped constructor avoids literal control characters.
-const ansiPattern = new RegExp(
-  "[\\u001B\\u009B][[\\]\\()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[-a-zA-Z\\d\\\\/#&.:=?%@~_]+)*)?\\u0007)|(?:(?:\\d{1,4}(?:[;:]\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))",
-  "g",
-);
+const MAX_BUFFERED_ANSI_SEQUENCE = 4_096;
+
+type AnsiState =
+  | "text"
+  | "escape"
+  | "escape-intermediate"
+  | "csi"
+  | "csi-discard"
+  | "osc"
+  | "osc-escape"
+  | "osc-discard"
+  | "osc-discard-escape";
+
+function isEscapeIntermediate(code: number): boolean {
+  return code >= 0x20 && code <= 0x2f;
+}
+
+function isEscapeFinal(code: number): boolean {
+  return code >= 0x30 && code <= 0x7e;
+}
+
+function isCsiBody(code: number): boolean {
+  return code >= 0x20 && code <= 0x3f;
+}
+
+function isCsiFinal(code: number): boolean {
+  return code >= 0x40 && code <= 0x7e;
+}
+
+/**
+ * Removes terminal control sequences in one pass. Potentially malformed
+ * sequences retain at most a small fixed buffer; longer sequences are
+ * discarded until their terminator instead of triggering unbounded lookahead.
+ */
+function stripAnsiSequences(value: string): string {
+  const output: string[] = [];
+  let pending: string[] = [];
+  let state: AnsiState = "text";
+
+  const reset = (): void => {
+    pending = [];
+    state = "text";
+  };
+  const preserveMalformed = (): void => {
+    output.push(...pending);
+    reset();
+  };
+  const buffer = (character: string): boolean => {
+    pending.push(character);
+    return pending.length <= MAX_BUFFERED_ANSI_SEQUENCE;
+  };
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index] ?? "";
+    const code = value.charCodeAt(index);
+
+    switch (state) {
+      case "text":
+        if (code === 0x1b) {
+          pending = [character];
+          state = "escape";
+        } else if (code === 0x9b) {
+          pending = [character];
+          state = "csi";
+        } else {
+          output.push(character);
+        }
+        break;
+      case "escape":
+        buffer(character);
+        if (character === "[") {
+          state = "csi";
+        } else if (character === "]") {
+          state = "osc";
+        } else if (isEscapeIntermediate(code)) {
+          state = "escape-intermediate";
+        } else if (isEscapeFinal(code)) {
+          reset();
+        } else {
+          preserveMalformed();
+        }
+        break;
+      case "escape-intermediate":
+        if (!buffer(character)) {
+          preserveMalformed();
+        } else if (isEscapeIntermediate(code)) {
+          break;
+        } else if (isEscapeFinal(code)) {
+          reset();
+        } else {
+          preserveMalformed();
+        }
+        break;
+      case "csi":
+        if (!buffer(character)) {
+          pending = [];
+          state = "csi-discard";
+        } else if (isCsiFinal(code)) {
+          reset();
+        } else if (!isCsiBody(code)) {
+          preserveMalformed();
+        }
+        break;
+      case "csi-discard":
+        if (isCsiFinal(code)) state = "text";
+        else if (!isCsiBody(code)) state = "text";
+        break;
+      case "osc":
+        if (!buffer(character)) {
+          pending = [];
+          state = code === 0x1b ? "osc-discard-escape" : "osc-discard";
+        } else if (code === 0x07 || code === 0x9c) {
+          reset();
+        } else if (code === 0x1b) {
+          state = "osc-escape";
+        }
+        break;
+      case "osc-escape":
+        if (!buffer(character)) {
+          pending = [];
+          state = character === "\\" ? "text" : "osc-discard";
+        } else if (character === "\\" || code === 0x07 || code === 0x9c) {
+          reset();
+        } else {
+          state = code === 0x1b ? "osc-escape" : "osc";
+        }
+        break;
+      case "osc-discard":
+        if (code === 0x07 || code === 0x9c) state = "text";
+        else if (code === 0x1b) state = "osc-discard-escape";
+        break;
+      case "osc-discard-escape":
+        if (character === "\\" || code === 0x07 || code === 0x9c) state = "text";
+        else state = code === 0x1b ? "osc-discard-escape" : "osc-discard";
+        break;
+    }
+  }
+
+  if (pending.length > 0) output.push(...pending);
+  return output.join("");
+}
 
 const safetyMarkers = [
   "security",
@@ -43,8 +179,7 @@ export function compressToolOutput(raw: string, options: Partial<CompressionOpti
   if (!Number.isInteger(config.preserveTailLines) || config.preserveTailLines < 0) {
     throw new Error("preserveTailLines must be a non-negative integer");
   }
-  const cleaned = raw
-    .replace(ansiPattern, "")
+  const cleaned = stripAnsiSequences(raw)
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   const lines = cleaned.split("\n");

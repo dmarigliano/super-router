@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { constants as fsConstants } from "node:fs";
 import {
   chmod,
   lstat,
@@ -20,6 +21,10 @@ const SCHEMA_VERSION = 1;
 const VERSION = "0.8.0";
 const MARKER_FILE = ".super-router-integration.json";
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const SUPPORTS_NOFOLLOW =
+  typeof fsConstants.O_NOFOLLOW === "number" && fsConstants.O_NOFOLLOW !== 0;
+const READ_ONLY_NOFOLLOW_FLAGS =
+  fsConstants.O_RDONLY | (SUPPORTS_NOFOLLOW ? fsConstants.O_NOFOLLOW : 0);
 
 const DEFINITIONS = {
   codex: {
@@ -232,11 +237,34 @@ async function readAllowedSources(repositoryRoot, definition) {
 
   for (const relativePath of definition.files) {
     const sourcePath = safeManagedPath(sourceRoot, relativePath);
-    const stat = await lstat(sourcePath);
-    if (stat.isSymbolicLink() || !stat.isFile()) {
-      throw new Error(`integration source must be a regular file: ${sourcePath}`);
+    let handle;
+    try {
+      handle = await open(sourcePath, READ_ONLY_NOFOLLOW_FLAGS);
+    } catch (error) {
+      if (error?.code === "ELOOP" || error?.code === "EMLINK") {
+        throw integrationSourceError(sourcePath);
+      }
+      throw error;
     }
-    const contents = await readFile(sourcePath);
+
+    let contents;
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile()) throw integrationSourceError(sourcePath);
+      if (!SUPPORTS_NOFOLLOW) {
+        const currentPathStat = await lstat(sourcePath);
+        if (
+          currentPathStat.isSymbolicLink() ||
+          !currentPathStat.isFile() ||
+          !sameFile(currentPathStat, stat)
+        ) {
+          throw integrationSourceError(sourcePath);
+        }
+      }
+      contents = await handle.readFile();
+    } finally {
+      await handle.close();
+    }
     sources.push({ contents, relativePath, sha256: sha256(contents) });
   }
   return sources;
@@ -438,6 +466,14 @@ function isHashMap(value) {
     !Array.isArray(value) &&
     Object.values(value).every((hash) => typeof hash === "string" && /^[a-f0-9]{64}$/u.test(hash))
   );
+}
+
+function integrationSourceError(sourcePath) {
+  return new Error(`integration source must be a regular file: ${sourcePath}`);
+}
+
+function sameFile(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
 }
 
 function sha256(contents) {

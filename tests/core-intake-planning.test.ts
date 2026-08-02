@@ -212,6 +212,34 @@ describe("multilingual prompt classification", () => {
     expect(actions[0]?.objective).not.toContain(targets[1]);
     expect(actions[1]?.objective).toContain(targets[1]);
   });
+
+  test.each([
+    ["Review the backend AND THEN fix the login bug", ["backend", "login bug"]],
+    ["Corrija o login E DEPOIS adicione testes", ["login", "testes"]],
+    ["Diseñe la API Y LUEGO implemente el endpoint", ["API", "endpoint"]],
+  ] as const)("preserves compound ordered-action separators in %s", (prompt, targets) => {
+    const spec = createTaskSpec(prompt);
+    const actions = decomposeTask(spec).nodes.filter(({ id }) => id.includes("-action-"));
+
+    expect(actions).toHaveLength(2);
+    expect(actions[0]?.objective).toContain(targets[0]);
+    expect(actions[0]?.objective).not.toContain(targets[1]);
+    expect(actions[1]?.objective).toContain(targets[1]);
+  });
+
+  test("tokenizes adversarial ordered-action whitespace without regex backtracking", () => {
+    const base = createTaskSpec("Review the backend, then fix the login bug");
+    const spec: TaskSpec = {
+      ...base,
+      objective: `Review the backend and${"\t".repeat(50_000)}then fix the login bug`,
+    };
+    const actions = decomposeTask(spec).nodes.filter(({ id }) => id.includes("-action-"));
+
+    expect(actions).toHaveLength(2);
+    expect(actions[0]?.objective).toContain("Review the backend");
+    expect(actions[0]?.objective).not.toContain("login bug");
+    expect(actions[1]?.objective).toContain("fix the login bug");
+  });
 });
 
 describe("TaskSpec contracts", () => {

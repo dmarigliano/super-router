@@ -74,6 +74,16 @@ describe("Caveman-style output compression", () => {
     expect(compressToolOutput("\u001b[31mfailed\u001b[0m\n\n\nnext")).toBe("failed\n\nnext");
   });
 
+  test("strips OSC hyperlinks without removing their visible label", () => {
+    const linked = "before \u001b]8;;https://example.com\u001b\\visible\u001b]8;;\u001b\\ after";
+    expect(compressToolOutput(linked)).toBe("before visible after");
+  });
+
+  test("handles an adversarially long ANSI sequence with bounded state", () => {
+    const adversarial = `before\u001b[${";#".repeat(100_000)}mafter`;
+    expect(compressToolOutput(adversarial)).toBe("beforeafter");
+  });
+
   test("honors explicit hard bounds even when the default compression heuristic says no", () => {
     const compressed = compressToolOutput("0123456789abcdefghijklmnopqrstuvwxyz", {
       maxLines: 1,

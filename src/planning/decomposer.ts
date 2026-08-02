@@ -35,6 +35,7 @@ export interface DecomposeTaskOptions {
 
 const CHANGE_INTENTS: readonly TaskIntent[] = ["implement", "fix", "refactor", "optimize", "debug"];
 const WORKSPACE_MUTATION_INTENTS: readonly TaskIntent[] = [...CHANGE_INTENTS, "test", "document"];
+const ORDERED_ACTION_CONJUNCTIONS = new Set(["and", "then", "e", "depois", "y", "luego"]);
 
 function isCodeChange(intent: TaskIntent): boolean {
   return CHANGE_INTENTS.includes(intent);
@@ -49,11 +50,96 @@ function taskIntentSequence(task: TaskSpec): TaskIntent[] {
   return [...sequence];
 }
 
+function isAsciiWordCharacter(code: number): boolean {
+  return (
+    (code >= 0x30 && code <= 0x39) ||
+    (code >= 0x41 && code <= 0x5a) ||
+    code === 0x5f ||
+    (code >= 0x61 && code <= 0x7a)
+  );
+}
+
+function isObjectiveDelimiter(code: number): boolean {
+  return code === 0x0a || code === 0x21 || code === 0x2e || code === 0x3b || code === 0x3f;
+}
+
+function isEcmaWhitespace(code: number): boolean {
+  return (
+    (code >= 0x09 && code <= 0x0d) ||
+    code === 0x20 ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
+}
+
+function trimOrderedClause(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end) {
+    const code = value.charCodeAt(start);
+    if (code !== 0x2c && !isEcmaWhitespace(code)) break;
+    start += 1;
+  }
+  while (end > start) {
+    const code = value.charCodeAt(end - 1);
+    if (code !== 0x2c && !isEcmaWhitespace(code)) break;
+    end -= 1;
+  }
+  return value.slice(start, end);
+}
+
+function splitOrderedActionObjective(objective: string): string[] {
+  const segments: string[] = [];
+  let segmentStart = 0;
+  let index = 0;
+
+  const appendSegment = (end: number): void => {
+    const segment = trimOrderedClause(objective.slice(segmentStart, end));
+    if (segment) segments.push(segment);
+  };
+
+  while (index < objective.length) {
+    const code = objective.charCodeAt(index);
+    if (isObjectiveDelimiter(code)) {
+      appendSegment(index);
+      index += 1;
+      while (index < objective.length && isObjectiveDelimiter(objective.charCodeAt(index))) {
+        index += 1;
+      }
+      segmentStart = index;
+      continue;
+    }
+
+    if (!isAsciiWordCharacter(code)) {
+      index += 1;
+      continue;
+    }
+
+    const wordStart = index;
+    index += 1;
+    while (index < objective.length && isAsciiWordCharacter(objective.charCodeAt(index))) {
+      index += 1;
+    }
+    const word = objective.slice(wordStart, index).toLowerCase();
+    if (ORDERED_ACTION_CONJUNCTIONS.has(word)) {
+      appendSegment(wordStart);
+      segmentStart = index;
+    }
+  }
+
+  appendSegment(objective.length);
+  return segments;
+}
+
 function orderedActionObjectives(task: TaskSpec, intents: readonly TaskIntent[]): string[] {
-  const segments = task.objective
-    .split(/\b(?:and\s+then|then|and|e\s+depois|depois|e|y\s+luego|luego|y)\b|[.!?;\n]+/giu)
-    .map((clause) => clause.replace(/^[,\s]+|[,\s]+$/gu, "").trim())
-    .filter(Boolean);
+  const segments = splitOrderedActionObjective(task.objective);
   const clauses: string[] = [];
   for (const segment of segments) {
     const expectedIntent = intents[clauses.length];

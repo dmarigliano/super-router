@@ -1,4 +1,4 @@
-import { closeSync, existsSync, fstatSync, lstatSync, openSync, readSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import { resolve } from "node:path";
 import type {
   Budget,
@@ -17,6 +17,9 @@ const defaultBudget: Budget = {
 };
 
 const MAX_CONFIG_BYTES = 1024 * 1024;
+const SUPPORTS_NOFOLLOW = typeof constants.O_NOFOLLOW === "number" && constants.O_NOFOLLOW !== 0;
+const CONFIG_OPEN_FLAGS =
+  constants.O_RDONLY | constants.O_NONBLOCK | (SUPPORTS_NOFOLLOW ? constants.O_NOFOLLOW : 0);
 
 const defaultModels: ModelCapability[] = [
   {
@@ -581,44 +584,62 @@ function assertConfig(config: RouterConfig): void {
 }
 
 export function loadConfig(cwd = process.cwd(), explicitPath?: string): RouterConfig {
-  if (explicitPath && !existsSync(explicitPath)) {
-    throw new Error(`Configuration file does not exist: ${explicitPath}`);
-  }
   const environmentPath = process.env.SUPER_ROUTER_CONFIG;
-  if (!explicitPath && environmentPath && !existsSync(environmentPath)) {
-    throw new Error(`SUPER_ROUTER_CONFIG does not exist: ${environmentPath}`);
+  const projectPath = resolve(cwd, "super-router.config.json");
+  let loaded: unknown = {};
+  let trust: ConfigTrust = "project";
+  if (explicitPath) {
+    loaded = JSON.parse(
+      readRequiredConfig(explicitPath, `Configuration file does not exist: ${explicitPath}`),
+    );
+    trust = "trusted";
+  } else if (environmentPath) {
+    loaded = JSON.parse(
+      readRequiredConfig(environmentPath, `SUPER_ROUTER_CONFIG does not exist: ${environmentPath}`),
+    );
+    trust = "trusted";
+  } else {
+    const projectConfig = readOptionalConfig(projectPath);
+    if (projectConfig !== undefined) loaded = JSON.parse(projectConfig);
   }
 
-  const projectPath = resolve(cwd, "super-router.config.json");
-  const configPath =
-    explicitPath ?? environmentPath ?? (existsSync(projectPath) ? projectPath : undefined);
-  const trust: ConfigTrust = explicitPath || environmentPath ? "trusted" : "project";
-  const loaded: unknown = configPath ? JSON.parse(readBoundedConfig(configPath)) : {};
   const config = mergeConfig(structuredClone(defaultConfig), loaded, trust);
   assertConfig(config);
   return config;
 }
 
 function readBoundedConfig(path: string): string {
-  const linkMetadata = lstatSync(path);
-  if (linkMetadata.isSymbolicLink() || !linkMetadata.isFile()) {
-    throw new Error(`Configuration path must be a regular file and cannot be a symlink: ${path}`);
+  let descriptor: number;
+  try {
+    descriptor = openSync(path, CONFIG_OPEN_FLAGS);
+  } catch (error) {
+    if (isNoFollowSymlinkError(error)) {
+      throw new Error(
+        `Configuration path must be a regular file and cannot be a symlink: ${path}`,
+        { cause: error },
+      );
+    }
+    throw error;
   }
 
-  const descriptor = openSync(path, "r");
   try {
     const metadata = fstatSync(descriptor);
     if (!metadata.isFile()) throw new Error(`Configuration path is not a regular file: ${path}`);
+    if (!SUPPORTS_NOFOLLOW) {
+      const pathMetadata = lstatSync(path);
+      if (
+        pathMetadata.isSymbolicLink() ||
+        !pathMetadata.isFile() ||
+        !sameFile(pathMetadata, metadata)
+      ) {
+        throw new Error(
+          `Configuration path must be a regular file and cannot be a symlink: ${path}`,
+        );
+      }
+    }
     if (metadata.size > MAX_CONFIG_BYTES) {
       throw new Error(`Configuration file exceeds the ${MAX_CONFIG_BYTES} byte limit: ${path}`);
     }
-    if (
-      linkMetadata.dev !== metadata.dev ||
-      (linkMetadata.ino !== 0 && metadata.ino !== 0 && linkMetadata.ino !== metadata.ino)
-    ) {
-      throw new Error(`Configuration file changed while it was being opened: ${path}`);
-    }
-
     const buffer = Buffer.alloc(MAX_CONFIG_BYTES + 1);
     let bytesRead = 0;
     while (bytesRead < buffer.length) {
@@ -633,4 +654,37 @@ function readBoundedConfig(path: string): string {
   } finally {
     closeSync(descriptor);
   }
+}
+
+function readRequiredConfig(path: string, missingMessage: string): string {
+  try {
+    return readBoundedConfig(path);
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) throw new Error(missingMessage, { cause: error });
+    throw error;
+  }
+}
+
+function readOptionalConfig(path: string): string | undefined {
+  try {
+    return readBoundedConfig(path);
+  } catch (error) {
+    if (hasErrorCode(error, "ENOENT")) return undefined;
+    throw error;
+  }
+}
+
+function isNoFollowSymlinkError(error: unknown): boolean {
+  return hasErrorCode(error, "ELOOP") || hasErrorCode(error, "EMLINK");
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return error instanceof Error && "code" in error && error.code === code;
+}
+
+function sameFile(
+  left: { dev: number; ino: number },
+  right: { dev: number; ino: number },
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
 }
