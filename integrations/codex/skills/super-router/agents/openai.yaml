@@ -1,0 +1,7 @@
+interface:
+  display_name: "Super Router"
+  short_description: "Plan and route coding work economically"
+  default_prompt: "Use Super Router to plan this task first. Execute only when I explicitly request a trusted run."
+
+policy:
+  allow_implicit_invocation: false

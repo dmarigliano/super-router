@@ -1,0 +1,32 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
+  "files": {
+    "includes": [
+      "src/**/*.ts",
+      "tests/**/*.ts",
+      "tests/**/*.mjs",
+      "scripts/**/*.ts",
+      "scripts/**/*.mjs",
+      "bin/**/*.js",
+      "integrations/**/*.mjs",
+      "integrations/**/*.json",
+      ".agents/**/*.json",
+      ".claude-plugin/**/*.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  }
+}

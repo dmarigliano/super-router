@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "super-router",
+  "displayName": "Super Router",
+  "version": "0.8.0",
+  "description": "Plan and explicitly execute development work through the local Super Router CLI.",
+  "author": {
+    "name": "Daniel Marigliano",
+    "url": "https://github.com/dmarigliano"
+  },
+  "homepage": "https://github.com/dmarigliano/super-router",
+  "repository": "https://github.com/dmarigliano/super-router",
+  "license": "MIT",
+  "keywords": ["ai-orchestration", "claude-code", "model-routing", "token-optimization"]
+}

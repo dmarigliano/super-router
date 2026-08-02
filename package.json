@@ -1,37 +1,82 @@
 {
-  "name": "super-router",
-  "version": "1.0.0",
-  "description": "Intelligent orchestration system that automatically routes requests to optimal models, agents, and skills",
+  "name": "@dmarigliano/super-router",
+  "version": "0.8.0",
+  "description": "Local-first orchestration engine that routes AI work across models, agents, skills, tools, and verification policies.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "license": "MIT",
-  "author": "Daniel",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "Daniel Marigliano",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/super-router.git"
+    "url": "git+https://github.com/dmarigliano/super-router.git"
+  },
+  "homepage": "https://github.com/dmarigliano/super-router#readme",
+  "bugs": {
+    "url": "https://github.com/dmarigliano/super-router/issues"
   },
   "bin": {
-    "super-router": "./bin/install.js"
+    "super-router": "bin/super-router.js"
   },
   "engines": {
-    "node": ">=18",
-    "bun": ">=1.0"
+    "node": ">=20",
+    "bun": ">=1.1"
   },
   "files": [
     "bin/",
+    "dist/",
+    "docs/",
+    "examples/",
+    "integrations/",
+    "scripts/install-integrations.mjs",
+    "scripts/integrations/installer.mjs",
     "skills/",
+    "ACKNOWLEDGMENTS.md",
+    "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "GOVERNANCE.md",
+    "LICENSE",
     "README.md",
-    "LICENSE"
+    "SECURITY.md",
+    "SUPPORT.md",
+    "super-router.config.example.json"
   ],
   "scripts": {
-    "install": "node bin/install.js"
+    "start": "bun run src/cli.ts",
+    "build": "bun build src/cli.ts src/index.ts --outdir dist --target node --format esm --sourcemap=external && tsc -p tsconfig.build.json && bun run scripts/rewrite-dts-imports.ts dist/types",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src tests scripts bin integrations .agents .claude-plugin",
+    "format": "biome format --write src tests scripts bin integrations .agents .claude-plugin",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "eval": "bun run src/eval-cli.ts",
+    "check": "bun run typecheck && bun run lint && bun test && bun run eval && bun run build",
+    "prepack": "bun run check"
   },
   "keywords": [
-    "claude",
-    "claude-code",
     "ai",
-    "routing",
-    "orchestration",
-    "model-selection",
     "agent",
-    "skill"
-  ]
+    "claude-code",
+    "codex",
+    "orchestration",
+    "model-routing",
+    "token-optimization"
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.0",
+    "@types/bun": "^1.2.19",
+    "typescript": "^5.9.2"
+  }
 }

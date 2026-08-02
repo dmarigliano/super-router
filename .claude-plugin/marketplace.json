@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "super-router",
+  "owner": {
+    "name": "Daniel Marigliano",
+    "url": "https://github.com/dmarigliano"
+  },
+  "description": "Native Super Router workflows for Claude Code.",
+  "plugins": [
+    {
+      "name": "super-router",
+      "source": "./integrations/claude-code",
+      "description": "Plan and explicitly execute development work through the local Super Router CLI.",
+      "version": "0.8.0",
+      "author": {
+        "name": "Daniel Marigliano",
+        "url": "https://github.com/dmarigliano"
+      },
+      "homepage": "https://github.com/dmarigliano/super-router",
+      "repository": "https://github.com/dmarigliano/super-router",
+      "license": "MIT",
+      "keywords": ["ai-orchestration", "claude-code", "model-routing"]
+    }
+  ]
+}

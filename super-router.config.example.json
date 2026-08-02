@@ -1,0 +1,27 @@
+{
+  "profile": "balanced",
+  "preferredProvider": "claude-code",
+  "qualityFloor": 0.88,
+  "concurrency": 3,
+  "dryRun": false,
+  "explain": true,
+  "allowExternalWrites": false,
+  "allowDestructiveActions": false,
+  "memory": {
+    "enabled": true,
+    "persistRawPrompts": false,
+    "maxResults": 8
+  },
+  "telemetry": {
+    "enabled": true,
+    "includePromptHash": true,
+    "retentionDays": 30
+  },
+  "budget": {
+    "maxInputTokens": 120000,
+    "maxOutputTokens": 30000,
+    "maxCostUsd": 10,
+    "maxDurationMs": 1800000,
+    "maxAttempts": 3
+  }
+}

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/dmarigliano/super-router/security/advisories/new
+    about: Report vulnerabilities privately. Do not include security details in a public issue.
+  - name: Read the support guide
+    url: https://github.com/dmarigliano/super-router/blob/main/SUPPORT.md
+    about: Check supported channels and the diagnostic information to include.

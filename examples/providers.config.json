@@ -1,0 +1,165 @@
+{
+  "preferredProvider": "claude-code",
+  "providers": [
+    {
+      "id": "claude-code",
+      "enabled": true,
+      "transport": "cli",
+      "billingMode": "subscription",
+      "executable": "claude",
+      "defaultModel": "sonnet",
+      "models": [
+        {
+          "provider": "claude-code",
+          "model": "sonnet",
+          "displayName": "Claude Sonnet via Claude Code",
+          "taskTypes": [
+            "implement",
+            "fix",
+            "review",
+            "research",
+            "design",
+            "refactor",
+            "test",
+            "document",
+            "optimize",
+            "security-audit",
+            "debug"
+          ],
+          "domains": ["general"],
+          "supportedEfforts": ["economy", "balanced", "deep"],
+          "tools": ["Read", "Glob", "Grep", "Edit", "Write", "Agent", "Skill"],
+          "contextWindow": 200000,
+          "maxOutputTokens": 32000,
+          "inputCostPerMillion": 0,
+          "outputCostPerMillion": 0,
+          "qualityPrior": 0.9,
+          "latencyPriorMs": 8000,
+          "enabled": true
+        },
+        {
+          "provider": "claude-code",
+          "model": "opus",
+          "displayName": "Claude Opus via Claude Code",
+          "taskTypes": [
+            "implement",
+            "fix",
+            "review",
+            "research",
+            "design",
+            "refactor",
+            "test",
+            "document",
+            "optimize",
+            "security-audit",
+            "debug"
+          ],
+          "domains": ["general"],
+          "supportedEfforts": ["balanced", "deep", "max"],
+          "tools": ["Read", "Glob", "Grep", "Edit", "Write", "Agent", "Skill"],
+          "contextWindow": 200000,
+          "maxOutputTokens": 64000,
+          "inputCostPerMillion": 0,
+          "outputCostPerMillion": 0,
+          "qualityPrior": 0.97,
+          "latencyPriorMs": 15000,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "codex",
+      "enabled": false,
+      "transport": "cli",
+      "billingMode": "subscription",
+      "executable": "codex",
+      "defaultModel": "gpt-5.6-sol",
+      "models": [
+        {
+          "provider": "codex",
+          "model": "gpt-5.6-sol",
+          "displayName": "GPT-5.6 Sol via Codex",
+          "taskTypes": [
+            "implement",
+            "fix",
+            "review",
+            "research",
+            "design",
+            "refactor",
+            "test",
+            "document",
+            "optimize",
+            "security-audit",
+            "debug"
+          ],
+          "domains": ["general"],
+          "supportedEfforts": ["economy", "balanced", "deep", "max"],
+          "tools": ["Read", "Glob", "Grep", "Edit", "Write"],
+          "contextWindow": 400000,
+          "maxOutputTokens": 128000,
+          "inputCostPerMillion": 0,
+          "outputCostPerMillion": 0,
+          "qualityPrior": 0.96,
+          "latencyPriorMs": 10000,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "anthropic-api",
+      "enabled": false,
+      "transport": "http",
+      "billingMode": "metered",
+      "baseUrl": "https://api.anthropic.com",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "sendEffort": true,
+      "defaultModel": "claude-sonnet-5",
+      "models": [
+        {
+          "provider": "anthropic-api",
+          "model": "claude-sonnet-5",
+          "displayName": "Anthropic BYOK text model",
+          "taskTypes": ["review", "research", "design", "document", "security-audit"],
+          "domains": ["general"],
+          "supportedEfforts": ["economy", "balanced", "deep"],
+          "tools": [],
+          "contextWindow": 1000000,
+          "maxOutputTokens": 128000,
+          "inputCostPerMillion": 3,
+          "outputCostPerMillion": 15,
+          "qualityPrior": 0.94,
+          "latencyPriorMs": 8000,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "openai-api",
+      "enabled": false,
+      "transport": "http",
+      "billingMode": "metered",
+      "baseUrl": "https://api.openai.com",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "sendEffort": true,
+      "defaultModel": "gpt-5",
+      "models": [
+        {
+          "provider": "openai-api",
+          "model": "gpt-5",
+          "displayName": "OpenAI BYOK text model",
+          "taskTypes": ["review", "research", "design", "document", "security-audit"],
+          "domains": ["general"],
+          "supportedEfforts": ["economy", "balanced", "deep"],
+          "tools": [],
+          "contextWindow": 400000,
+          "maxOutputTokens": 128000,
+          "inputCostPerMillion": 1.25,
+          "outputCostPerMillion": 10,
+          "qualityPrior": 0.92,
+          "latencyPriorMs": 9000,
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}
