@@ -2,7 +2,7 @@
 
 ## Assessment scope
 
-Assessment date: 2026-08-01.
+Assessment date: 2026-08-02.
 
 This scorecard evaluates the current source tree as a **supervised, local-first,
 community open source 0.8 MVP**. It does not rate Super Router as an unattended
@@ -30,22 +30,25 @@ handling, and public documentation. A roadmap item is not evidence.
 | Real implementation | **8.5/10** | The CLI and library execute the intake-to-verification pipeline with real adapters and deterministic doubles |
 | Reliability | **8.2/10** | Strong local gates, bounded runtime behavior, capability revalidation, and end-to-end tests; durable recovery/live conformance remain open |
 | Operational security | **8.0/10** | Defensible for supervised local use with least privilege; not sufficient for unattended production |
-| Open source readiness | **8.0/10** | Repository content and package candidate are reviewable and community-ready; history reconciliation, hosted CI/CodeQL, npm publication, and release evidence remain pending |
+| Open source readiness | **8.2/10** | Public repository history is preserved and hosted CI/CodeQL pass; npm publication, tag/release, and stronger repository controls remain pending |
 
 The minimum is therefore **8.0/10 within the stated MVP scope**. This is not a
 claim that every subdimension or production deployment deserves 8/10.
 
 ## Verification snapshot
 
-Reproduced locally during candidate work on 2026-08-01 with Bun 1.3.14:
+Reproduced locally during candidate work through 2026-08-02 with Bun 1.3.14:
 
 ```text
 bun run check
 ```
 
-Result on the final local candidate: strict TypeScript, Biome, 296 deterministic
+Result on the final local candidate: strict TypeScript, Biome, 306 deterministic
 tests, 46/46 intake eval cases, and the CLI/library/declaration build passed.
-Hosted CI remains the authoritative reproducibility check after push.
+The public merge commit
+[`b056193`](https://github.com/dmarigliano/super-router/commit/b0561930bba4b0ff21b0f398c9aeb025234357e1)
+also passed hosted [CI](https://github.com/dmarigliano/super-router/actions/runs/30730972945)
+and [CodeQL](https://github.com/dmarigliano/super-router/actions/runs/30730972926).
 
 The publication allowlist was also reproduced with:
 
@@ -55,10 +58,10 @@ npm pack --ignore-scripts --dry-run
 
 Result: the final local candidate contained 91 allowlisted files, including the
 CLI, library bundles, declarations, docs, examples, skills, acknowledgments,
-native integrations, and their fixed installer scripts. It was 544,659 bytes
-packed and 2,361,790 bytes unpacked. The tarball installed with lifecycle
-scripts disabled; version, library import, and managed integration
-install/uninstall checks passed. No package was published.
+native integrations, and their fixed installer scripts. The dry-run artifact
+was approximately 0.56 MB packed and 2.42 MB unpacked. The tarball installed
+with lifecycle scripts disabled; version, library import, and managed
+integration install/uninstall checks passed. No package was published.
 
 A live Codex path was also reproduced on macOS with Node 26.0.0, Codex
 0.146.0-alpha.9.2, ChatGPT authentication, and `gpt-5.6-sol`. `doctor` reported
@@ -74,9 +77,9 @@ and 96 reasoning tokens against a pre-run estimate of 446 input tokens. It
 shows the adapter path worked, but it does not validate token economy or
 calibration and is not a benchmark. The packed-candidate run separately
 reported 84,094 input tokens (69,120 cached), 527 output tokens, and 14
-reasoning tokens against 1,469 summed node estimates. Hosted GitHub Actions,
-branch protection, CodeQL results for the candidate, npm publication, and
-external security review still cannot be proven by the local run.
+reasoning tokens against 1,469 summed node estimates. Hosted CI and CodeQL are
+now proven for the merge commit; branch protection, npm publication, a tag and
+GitHub release, and external security review remain separate gates.
 
 ## 1. Idea and positioning — 9.0/10
 
@@ -355,9 +358,9 @@ be below 8 for unattended production today because:
 
 ### Why it is not higher
 
-- The hosted repository has two preserved unsupported prototype commits. The
-  0.8 candidate has not yet been reconciled on top of them, tagged, or observed
-  in hosted CI/CodeQL; workflow presence is not workflow evidence.
+- The two unsupported prototype commits are preserved and the candidate was
+  reconciled on top of them through a normal pull request. Hosted CI and CodeQL
+  passed, but the candidate has not yet been tagged or released.
 - No scoped npm release is claimed as published.
 - Branch protection, private vulnerability reporting, and repository security
   settings require verification on GitHub.
@@ -365,15 +368,18 @@ be below 8 for unattended production today because:
 
 ## Residual gates
 
+Completed on 2026-08-02: the candidate was reconciled as a descendant of the
+preserved prototype history without force-push, merged through PR #1, and
+observed passing hosted CI and CodeQL on the resulting `main` commit.
+
 | Priority | Gate | Effect on score |
 | --- | --- | --- |
-| Before the release commit | Reconcile the candidate as a descendant of the two preserved prototype commits without force-push | Preserves reviewable provenance while replacing unsupported behavior |
-| Before publication | Observe hosted CI/CodeQL on the candidate, rerun pack/install checks, and verify npm/GitHub release artifacts | Converts local/source evidence into distribution evidence |
+| Before publication | Rerun pack/install checks and verify npm/GitHub release artifacts | Converts source evidence into distribution evidence |
 | Before enabling external, destructive, or unattended effects | Parameter-bound approval tokens, enforceable effect mediation, idempotency, and verified receipts | Required for production operational security ≥ 8 |
 | Before sensitive provider routing | Enforce privacy/residency/egress policy on primary and fallback routes | Required for sensitive-data claims |
 | Before 1.0 | Durable checkpoint/resume, versioned project-namespace migration, live adapter conformance, load/recovery benchmarks | Raises reliability beyond MVP |
 | Before savings claims | Versioned price freshness and accepted-task evals against baselines | Required to validate positioning economically |
-| Before stable release | Protected branch, observed CI/CodeQL, signed provenance, incident drill, external security review | Raises OSS/security maturity toward 9–10 |
+| Before stable release | Protected branch, signed provenance, incident drill, external security review | Raises OSS/security maturity toward 9–10 |
 
 ## Final judgment
 

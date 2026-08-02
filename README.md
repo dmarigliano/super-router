@@ -1,5 +1,8 @@
 # Super Router
 
+[![CI](https://github.com/dmarigliano/super-router/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dmarigliano/super-router/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/dmarigliano/super-router/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/dmarigliano/super-router/actions/workflows/codeql.yml)
+
 > A local-first control plane that turns an objective into a verified execution plan and routes
 > each step to the lowest predicted primary-call-cost combination of model, effort, agent, and
 > skills that can meet its quality and safety requirements within an explicit bounded candidate
@@ -16,7 +19,10 @@ and records redacted evidence.
 ## Project status
 
 Current source version: **0.8.0 — executable local MVP and release candidate**. This repository does
-not claim that 0.8.0 has already been published to npm.
+not claim that 0.8.0 has already been published to npm. The public `main` source has passed its
+hosted [CI](https://github.com/dmarigliano/super-router/actions/runs/30730972945) and
+[CodeQL](https://github.com/dmarigliano/super-router/actions/runs/30730972926) checks and is usable
+from a reviewed source checkout through the steps below.
 
 | Capability | Status |
 | --- | --- |

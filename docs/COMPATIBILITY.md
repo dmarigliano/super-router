@@ -22,8 +22,23 @@ The package had not been published to npm when this snapshot was written. The
 final candidate was packed locally, installed with lifecycle scripts disabled
 into a disposable prefix, and exercised through its installed binary. Version,
 library import, and managed Codex/Claude integration install/uninstall checks
-passed. A clean installation from the eventual registry artifact and hosted
-CI/CodeQL remain release gates.
+passed. Hosted CI and CodeQL subsequently passed on the public merge commit. A
+clean installation from the eventual registry artifact remains a release gate.
+
+## Hosted repository verification — 2026-08-02
+
+- The candidate was reconciled on top of the two preserved prototype commits
+  without force-push and merged through [PR #1](https://github.com/dmarigliano/super-router/pull/1).
+- The public `main` commit
+  [`b056193`](https://github.com/dmarigliano/super-router/commit/b0561930bba4b0ff21b0f398c9aeb025234357e1)
+  passed hosted [CI](https://github.com/dmarigliano/super-router/actions/runs/30730972945)
+  and [CodeQL](https://github.com/dmarigliano/super-router/actions/runs/30730972926).
+- The hosted CodeQL snapshot reported zero open alerts after the five findings
+  detected on the candidate were fixed before merge.
+
+These checks demonstrate reproducibility and static-analysis status for that
+specific commit. They do not establish live provider compatibility, production
+reliability, or a token-economy advantage.
 
 ## Reproduced Codex path
 
@@ -92,7 +107,6 @@ router's token estimate or an economic advantage.
 - Clean installation from the final npm-registry artifact; only the locally
   packed candidate was installed and tested here.
 - Marketplace installation from a public repository/tag.
-- Current hosted GitHub Actions and CodeQL results for the release commit.
 - BYOK conformance against live Anthropic or OpenAI accounts.
 - Load, soak, interruption/recovery, and cross-version compatibility.
 
