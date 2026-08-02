@@ -1,0 +1,13 @@
+# Bootstrap ownership. This file identifies the current reviewer; branch protection
+# and required-review settings must still be configured in GitHub.
+* @dmarigliano
+
+# Changes to execution, security, release, and governance boundaries require
+# explicit maintainer attention.
+/.github/ @dmarigliano
+/src/adapters/ @dmarigliano
+/src/runtime/ @dmarigliano
+/src/security/ @dmarigliano
+/SECURITY.md @dmarigliano
+/GOVERNANCE.md @dmarigliano
+/package.json @dmarigliano

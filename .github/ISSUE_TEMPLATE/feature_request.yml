@@ -1,0 +1,87 @@
+name: Feature request
+description: Propose a measurable product, routing, adapter, or safety improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Super Router optimizes total expected cost subject to quality, safety, privacy, and time constraints. Please frame the request as a user outcome with evidence we can verify.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and user outcome
+      description: What cannot be achieved reliably today, and who benefits?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe behavior and boundaries, not only an implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that prove the feature works.
+      placeholder: |
+        - Given ..., when ..., then ...
+        - The run stops when ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Intake and planning
+        - Capability registry
+        - Routing and policy
+        - Context and memory
+        - Scheduler and runtime
+        - Provider or tool adapter
+        - Verification
+        - Telemetry and cost
+        - Security and privacy
+        - Documentation and community
+    validations:
+      required: true
+
+  - type: textarea
+    id: economics
+    attributes:
+      label: Quality and cost hypothesis
+      description: What quality floor applies? How could token, cost, latency, retries, and success be measured?
+    validations:
+      required: true
+
+  - type: textarea
+    id: security
+    attributes:
+      label: Security and privacy impact
+      description: Identify new data, credentials, tools, external effects, permissions, or trust boundaries. Write "None identified" only after considering them.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Could an existing capability, configuration, adapter, or smaller change solve the problem?
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the roadmap.
+          required: true
+        - label: I checked the current status and understand unchecked roadmap work is not shipped.
+          required: true

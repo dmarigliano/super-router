@@ -1,0 +1,22 @@
+{
+  "name": "super-router",
+  "version": "0.8.0",
+  "description": "Plan and execute development work through the local Super Router CLI with explicit project trust.",
+  "author": {
+    "name": "Daniel Marigliano",
+    "url": "https://github.com/dmarigliano"
+  },
+  "homepage": "https://github.com/dmarigliano/super-router",
+  "repository": "https://github.com/dmarigliano/super-router",
+  "license": "MIT",
+  "keywords": ["ai-orchestration", "codex", "model-routing", "token-optimization"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Super Router",
+    "shortDescription": "Budget-aware routing for coding tasks",
+    "longDescription": "Use the locally installed Super Router CLI to decompose, route, budget, execute, and verify coding tasks. Real runs require explicit project trust.",
+    "developerName": "Daniel Marigliano",
+    "category": "Developer Tools",
+    "websiteURL": "https://github.com/dmarigliano/super-router"
+  }
+}

@@ -1,32 +1,5 @@
 {
-  "routing": {
-    "autoModel": true,
-    "autoAgent": true,
-    "autoSkill": true
-  },
-  "preferences": {
-    "costOptimization": "balanced",
-    "preferSpeed": false,
-    "preferQuality": true,
-    "autoEscalate": true
-  },
-  "thresholds": {
-    "complexityHigh": 0.7,
-    "complexityCritical": 0.9,
-    "parallelAgentMax": 3,
-    "haikuMaxTokens": 2000,
-    "sonnetMaxTokens": 20000,
-    "opusMinTokens": 20000
-  },
-  "logging": {
-    "enabled": true,
-    "path": "~/.claude/super-router.log",
-    "trackSavings": true,
-    "verbose": false
-  },
-  "overrides": {
-    "forceModel": null,
-    "forceAgent": null,
-    "forceSkill": null
-  }
+  "$comment": "Legacy compatibility pointer. Runtime configuration belongs in super-router.config.json.",
+  "configFile": "super-router.config.json",
+  "version": "0.8.0"
 }

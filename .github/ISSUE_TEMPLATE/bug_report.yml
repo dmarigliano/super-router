@@ -1,0 +1,107 @@
+name: Bug report
+description: Report a reproducible defect or ask for help with unexpected behavior.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve Super Router. Search existing issues first.
+        Never include API keys, private prompts, customer data, or proprietary source. Report security vulnerabilities privately using SECURITY.md.
+
+  - type: dropdown
+    id: request-type
+    attributes:
+      label: Request type
+      options:
+        - Reproducible defect
+        - Support question
+        - Regression
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: 0.8.0 or commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, architecture, Bun version, and Node.js version.
+      placeholder: macOS 15 arm64; Bun 1.2.19; Node 22.x
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Operating mode
+      options:
+        - Dry-run / explain
+        - Execution
+        - Tests or development
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior using sanitized information.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the smallest safe prompt, configuration, and commands needed. Replace sensitive content with synthetic placeholders.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized output
+      description: Remove credentials, private prompts, file contents, usernames, and customer data.
+      render: text
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Blocks all use
+        - Incorrect or unsafe result
+        - Budget or performance regression
+        - Intermittent failure
+        - Minor inconvenience
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label: I removed secrets and private or proprietary data.
+          required: true
+        - label: This is not a security vulnerability requiring private disclosure.
+          required: true
