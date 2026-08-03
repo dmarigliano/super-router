@@ -26,6 +26,16 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     writeOutput(VERSION);
     return 0;
   }
+  // bin/super-router.js intercepts `integrations` before this module loads and
+  // spawns the packaged installer. Reaching here means the router was started
+  // directly from source, where that script is not resolvable from the bundle.
+  if (options.command === "integrations") {
+    throw new Error(
+      "integrations is served by the super-router executable, not the router entry point. " +
+        "Run `super-router integrations <install|uninstall> <target>` after installation, or " +
+        "`node scripts/install-integrations.mjs <install|uninstall> <target>` from a source checkout.",
+    );
+  }
 
   const cwd = resolve(options.cwd);
   const configPath = options.configPath ? resolve(cwd, options.configPath) : undefined;

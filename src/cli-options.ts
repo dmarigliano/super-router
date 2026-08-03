@@ -1,6 +1,14 @@
 import type { EffortLevel } from "./contracts.ts";
 
-export type CliCommand = "plan" | "run" | "doctor" | "capabilities" | "stats" | "help" | "version";
+export type CliCommand =
+  | "plan"
+  | "run"
+  | "doctor"
+  | "capabilities"
+  | "stats"
+  | "integrations"
+  | "help"
+  | "version";
 
 export interface CliOptions {
   command: CliCommand;
@@ -33,6 +41,7 @@ const commands = new Set<CliCommand>([
   "doctor",
   "capabilities",
   "stats",
+  "integrations",
   "help",
   "version",
 ]);
@@ -70,6 +79,11 @@ export function parseCliOptions(argv: string[], cwd = process.cwd()): CliOptions
     memoryEnabled: true,
     skills: [],
   };
+
+  // `integrations` is routed by bin/super-router.js, which resolves the packaged
+  // installer script relative to itself. Its flags belong to that installer, so
+  // they must not reach the router option parser below.
+  if (command === "integrations") return options;
 
   while (index < argv.length) {
     const argument = argv[index];
@@ -189,6 +203,8 @@ Usage:
   super-router doctor                   Validate configuration and provider runtimes
   super-router stats                    Summarize local, redacted telemetry
   super-router integrations <action>    Install or uninstall native Codex/Claude skills
+                                        (executable only; from source use
+                                        node scripts/install-integrations.mjs)
 
 Routing options:
   --prefer-provider <id>   Prefer a provider while retaining cross-provider fallback
