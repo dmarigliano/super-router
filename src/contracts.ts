@@ -234,6 +234,14 @@ export interface StepResult {
   output: string;
   artifacts: string[];
   usage: UsageRecord;
+  /**
+   * What the runtime reserved before the attempt, kept beside the reported usage
+   * so the estimator's error is measurable rather than invisible. The estimate
+   * covers the prompt Super Router builds; a provider also charges for its own
+   * system prompt, ambient instructions, files read during the turn, and context
+   * resent on later turns, so the two are expected to differ.
+   */
+  reservedUsage?: { inputTokens: number; outputTokens: number; costUsd: number };
   verification?: VerificationResult;
   error?: string;
 }
@@ -298,6 +306,14 @@ export interface ExecutionContext {
   prompt: string;
   materializedCapabilities?: MaterializedRouteCapabilities;
   timeoutMs: number;
+  /**
+   * Hard spend ceiling for this attempt: the lower of the node's own share and
+   * what remains of the task budget. Adapters that can bound a provider run must
+   * use this rather than `step.maxCostUsd`, because the ledger only reconciles
+   * between steps — without an in-step ceiling a single attempt can overshoot the
+   * whole task budget before the next step is refused.
+   */
+  costCeilingUsd: number;
 }
 
 export interface ProviderExecutionResult {

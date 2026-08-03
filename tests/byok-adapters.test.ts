@@ -63,6 +63,7 @@ function executionContext(provider: string, modelId: string): ExecutionContext {
     route,
     prompt: "Return a concise result.",
     timeoutMs: 1_000,
+    costCeilingUsd: step.maxCostUsd,
   };
 }
 

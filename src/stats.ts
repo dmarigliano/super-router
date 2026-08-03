@@ -18,6 +18,75 @@ export interface TelemetryStats {
   verifiedRuns: number;
   failedRuns: number;
   usage: UsageRecord;
+  /**
+   * Pre-run reservations summed over the steps that recorded one, and the
+   * provider-reported usage of those same steps. The pair is what makes the
+   * estimator's error measurable: the estimate covers Super Router's own prompt,
+   * while the provider also charges for its system prompt, ambient instructions,
+   * files read during the turn, and context resent on later turns.
+   */
+  reserved: ReservedUsageTotals;
+  stepUsage: ReservedUsageTotals;
+  /** The same pairing split by provider id, which is the granularity that matters. */
+  calibrationByProvider: Record<string, ProviderCalibrationSamples>;
+}
+
+export interface ProviderCalibrationSamples {
+  reservedInputTokens: number;
+  reportedInputTokens: number;
+  reservedOutputTokens: number;
+  reportedOutputTokens: number;
+  samples: number;
+}
+
+export interface TokenCalibration {
+  inputRatio: number;
+  outputRatio: number;
+  samples: number;
+}
+
+/** Below this many observations a ratio is noise, so the estimate is left alone. */
+export const MIN_CALIBRATION_SAMPLES = 3;
+/**
+ * Ratios are clamped so one pathological run cannot make every later estimate
+ * useless. The upper input bound is generous because provider overhead genuinely
+ * dominates: an observed 76x is real, not an outlier.
+ */
+export const MAX_CALIBRATION_RATIO = 200;
+export const MIN_CALIBRATION_RATIO = 1 / 200;
+
+/**
+ * Derives a multiplier to apply to future estimates for one provider. Returns
+ * undefined when there is not enough evidence, which callers must treat as "leave
+ * the estimate as it is" rather than as a ratio of 1.
+ */
+export function deriveCalibration(
+  stats: Pick<TelemetryStats, "calibrationByProvider">,
+  provider: string,
+): TokenCalibration | undefined {
+  const sample = stats.calibrationByProvider[provider];
+  if (!sample || sample.samples < MIN_CALIBRATION_SAMPLES) return undefined;
+  const inputRatio = ratioOrUndefined(sample.reservedInputTokens, sample.reportedInputTokens);
+  const outputRatio = ratioOrUndefined(sample.reservedOutputTokens, sample.reportedOutputTokens);
+  if (inputRatio === undefined && outputRatio === undefined) return undefined;
+  return {
+    inputRatio: inputRatio ?? 1,
+    outputRatio: outputRatio ?? 1,
+    samples: sample.samples,
+  };
+}
+
+function ratioOrUndefined(reserved: number, reported: number): number | undefined {
+  if (reserved <= 0 || reported <= 0) return undefined;
+  const ratio = reported / reserved;
+  if (!Number.isFinite(ratio)) return undefined;
+  return Math.min(MAX_CALIBRATION_RATIO, Math.max(MIN_CALIBRATION_RATIO, ratio));
+}
+
+export interface ReservedUsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
 }
 
 export interface TelemetryStatsLimits {
@@ -50,6 +119,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function finite(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+/**
+ * Only counts a step when it recorded both a reservation and reported usage, so
+ * the two totals stay comparable. A step whose provider returned no usage would
+ * otherwise drag the ratio toward zero and understate the error.
+ */
+function accumulateReservation(result: TelemetryStats, payload: unknown): void {
+  if (!isRecord(payload) || !isRecord(payload.reservedUsage)) return;
+  const usage = usageFromPayload(payload);
+  if (!usage) return;
+  const reserved = payload.reservedUsage;
+  result.reserved.inputTokens += finite(reserved.inputTokens);
+  result.reserved.outputTokens += finite(reserved.outputTokens);
+  result.reserved.costUsd += finite(reserved.costUsd);
+  result.stepUsage.inputTokens += usage.inputTokens;
+  result.stepUsage.outputTokens += usage.outputTokens;
+  result.stepUsage.costUsd += usage.costUsd;
+
+  const provider =
+    isRecord(payload.route) && typeof payload.route.provider === "string"
+      ? payload.route.provider
+      : undefined;
+  if (!provider) return;
+  result.calibrationByProvider[provider] ??= {
+    reservedInputTokens: 0,
+    reportedInputTokens: 0,
+    reservedOutputTokens: 0,
+    reportedOutputTokens: 0,
+    samples: 0,
+  };
+  const bucket = result.calibrationByProvider[provider];
+  bucket.reservedInputTokens += finite(reserved.inputTokens);
+  bucket.reportedInputTokens += usage.inputTokens;
+  bucket.reservedOutputTokens += finite(reserved.outputTokens);
+  bucket.reportedOutputTokens += usage.outputTokens;
+  bucket.samples += 1;
 }
 
 function usageFromPayload(value: unknown): UsageRecord | undefined {
@@ -164,7 +270,10 @@ function processTelemetryContents(
     }
     result.events += 1;
     if (event.type === "run.started") result.runsStarted += 1;
-    if (event.type === "step.finished") result.stepsFinished += 1;
+    if (event.type === "step.finished") {
+      result.stepsFinished += 1;
+      accumulateReservation(result, event.payload);
+    }
     if (event.type !== "run.finished") continue;
     result.runsFinished += 1;
     const payload = isRecord(event.payload) ? event.payload : {};
@@ -226,6 +335,9 @@ export async function readTelemetryStats(
     verifiedRuns: 0,
     failedRuns: 0,
     usage: { ...EMPTY_USAGE },
+    reserved: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    stepUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    calibrationByProvider: {},
   };
 
   let files: string[];
@@ -275,9 +387,28 @@ export async function readTelemetryStats(
   return result;
 }
 
+/** Renders one axis as `40.0x under` / `10.0x over` / `on target`. */
+function accuracyRatio(reserved: number, actual: number): string {
+  if (reserved <= 0 || actual <= 0) return "unknown";
+  const ratio = actual / reserved;
+  if (ratio >= 1.05) return `${ratio.toFixed(1)}x under`;
+  if (ratio <= 0.95) return `${(1 / ratio).toFixed(1)}x over`;
+  return "on target";
+}
+
 export function renderTelemetryStats(stats: TelemetryStats): string {
   const acceptance = stats.runsFinished > 0 ? (stats.verifiedRuns / stats.runsFinished) * 100 : 0;
   const costPerAccepted = stats.verifiedRuns > 0 ? stats.usage.costUsd / stats.verifiedRuns : 0;
+  const hasReservations = stats.reserved.inputTokens > 0 || stats.reserved.outputTokens > 0;
+  const accuracy = hasReservations
+    ? [
+        `Estimate accuracy vs provider: input=${accuracyRatio(
+          stats.reserved.inputTokens,
+          stats.stepUsage.inputTokens,
+        )} output=${accuracyRatio(stats.reserved.outputTokens, stats.stepUsage.outputTokens)}`,
+        `  reserved input=${stats.reserved.inputTokens} output=${stats.reserved.outputTokens} | reported input=${stats.stepUsage.inputTokens} output=${stats.stepUsage.outputTokens}`,
+      ]
+    : [];
   return [
     "Super Router local telemetry",
     `Runs: started=${stats.runsStarted} finished=${stats.runsFinished} verified=${stats.verifiedRuns} failed=${stats.failedRuns}`,
@@ -285,6 +416,7 @@ export function renderTelemetryStats(stats: TelemetryStats): string {
     `Steps finished: ${stats.stepsFinished}`,
     `Tokens: input=${stats.usage.inputTokens} output=${stats.usage.outputTokens} reasoning=${stats.usage.reasoningTokens} cached=${stats.usage.cachedInputTokens}`,
     `Cost: $${stats.usage.costUsd.toFixed(4)} | cost/accepted: $${costPerAccepted.toFixed(4)}`,
+    ...accuracy,
     `Telemetry: files=${stats.files}/${stats.filesDiscovered} skipped=${stats.filesSkipped} bytes=${stats.bytesRead} records=${stats.recordsExamined} events=${stats.events} malformed=${stats.malformedLines} truncated=${stats.truncated}`,
   ].join("\n");
 }

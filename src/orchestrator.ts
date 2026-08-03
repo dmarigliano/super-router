@@ -33,6 +33,7 @@ import {
 } from "./runtime/index.ts";
 import { type ApprovalHandler, OperationalPolicy } from "./security/index.ts";
 import { resolveStatePaths } from "./state-paths.ts";
+import { deriveCalibration, readTelemetryStats, type TokenCalibration } from "./stats.ts";
 import { JsonlTelemetry, NullTelemetry, type TelemetrySink } from "./telemetry/index.ts";
 import { estimateTokens, stableHash } from "./utils.ts";
 
@@ -81,6 +82,8 @@ export class SuperRouter {
   readonly #memory: LocalMemoryStore | undefined;
   readonly #scheduler: DagScheduler;
   readonly #telemetryRetentionReady: Promise<void>;
+  readonly #calibrationReady: () => Promise<void>;
+  #calibration: Map<string, TokenCalibration> | undefined;
   readonly #trustProject: boolean;
 
   constructor(options: SuperRouterOptions) {
@@ -157,11 +160,31 @@ export class SuperRouter {
     if (this.#config.dryRun && !adapters.some(({ id }) => id === "dry-run")) {
       adapters.push(new DryRunAdapter());
     }
+    // Calibration is read lazily and cached for the instance: it needs the recorded
+    // history of earlier runs, and a fresh state directory legitimately has none.
+    // A read failure must not block execution, so it degrades to no calibration.
+    let calibrationReady: Promise<Map<string, TokenCalibration>> | undefined;
+    const calibrationDirectory = this.#config.telemetry.enabled ? paths.telemetry : undefined;
+    this.#calibrationReady = async (): Promise<void> => {
+      if (!calibrationDirectory) return;
+      calibrationReady ??= readTelemetryStats(calibrationDirectory)
+        .then((stats) => {
+          const derived = new Map<string, TokenCalibration>();
+          for (const provider of Object.keys(stats.calibrationByProvider)) {
+            const calibration = deriveCalibration(stats, provider);
+            if (calibration) derived.set(provider, calibration);
+          }
+          return derived;
+        })
+        .catch(() => new Map<string, TokenCalibration>());
+      this.#calibration = await calibrationReady;
+    };
     this.#scheduler = new DagScheduler({
       adapters,
       verifier,
       telemetry,
       policy,
+      calibration: (provider) => this.#calibration?.get(provider),
     });
   }
 
@@ -225,6 +248,7 @@ export class SuperRouter {
     options: OrchestratorPlanOptions & { signal?: AbortSignal } = {},
   ): Promise<RunResult> {
     await this.#telemetryRetentionReady;
+    await this.#calibrationReady();
     if (!this.#trustProject) {
       throw new Error(
         "Execution requires explicit workspace trust because providers and verification commands can execute repository code. Pass trustProject: true or --trust-project only for a workspace you trust.",

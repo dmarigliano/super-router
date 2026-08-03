@@ -6,7 +6,13 @@ import { defaultConfig } from "../src/config.ts";
 import type { ProviderAdapter, ProviderAvailability } from "../src/contracts.ts";
 import { renderDoctorReport, runDoctor } from "../src/doctor.ts";
 import { resolveStatePaths } from "../src/state-paths.ts";
-import { readTelemetryStats, renderTelemetryStats } from "../src/stats.ts";
+import {
+  deriveCalibration,
+  MAX_CALIBRATION_RATIO,
+  MIN_CALIBRATION_SAMPLES,
+  readTelemetryStats,
+  renderTelemetryStats,
+} from "../src/stats.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -178,6 +184,60 @@ describe("local telemetry statistics", () => {
       failedRuns: 0,
     });
     expect(stats.usage.costUsd).toBe(0);
+  });
+
+  test("reports how far the pre-run reservation was from provider-reported usage", async () => {
+    // The estimator measures Super Router's own prompt; the provider also charges
+    // for its system prompt, ambient instructions, files read during the turn, and
+    // context resent on each turn. The gap is only knowable after the fact, so it
+    // has to be recorded to be correctable.
+    const directory = await temporaryDirectory();
+    const telemetry = join(directory, "telemetry");
+    await mkdir(telemetry);
+    const lines = [
+      JSON.stringify({
+        type: "step.finished",
+        payload: {
+          usage: { inputTokens: 30_000, outputTokens: 500 },
+          reservedUsage: { inputTokens: 500, outputTokens: 5_000, costUsd: 0 },
+        },
+      }),
+      JSON.stringify({
+        type: "step.finished",
+        payload: {
+          usage: { inputTokens: 10_000, outputTokens: 500 },
+          reservedUsage: { inputTokens: 500, outputTokens: 5_000, costUsd: 0 },
+        },
+      }),
+    ];
+    await writeFile(join(telemetry, "events-2026-08-03.jsonl"), lines.join("\n"), "utf8");
+
+    const stats = await readTelemetryStats(telemetry);
+    expect(stats.reserved.inputTokens).toBe(1_000);
+    expect(stats.reserved.outputTokens).toBe(10_000);
+    expect(stats.stepUsage.inputTokens).toBe(40_000);
+    expect(stats.stepUsage.outputTokens).toBe(1_000);
+
+    const rendered = renderTelemetryStats(stats);
+    expect(rendered).toContain("Estimate accuracy");
+    // 40,000 actual against 1,000 reserved is 40x under on input.
+    expect(rendered).toMatch(/input=40\.0x under/);
+    // 1,000 actual against 10,000 reserved is 10x over on output.
+    expect(rendered).toMatch(/output=10\.0x over/);
+  });
+
+  test("omits estimate accuracy when no step recorded a reservation", async () => {
+    const directory = await temporaryDirectory();
+    const telemetry = join(directory, "telemetry");
+    await mkdir(telemetry);
+    await writeFile(
+      join(telemetry, "events-2026-08-03.jsonl"),
+      JSON.stringify({ type: "step.finished", payload: { usage: { inputTokens: 10 } } }),
+      "utf8",
+    );
+    const stats = await readTelemetryStats(telemetry);
+    expect(stats.reserved.inputTokens).toBe(0);
+    expect(renderTelemetryStats(stats)).not.toContain("Estimate accuracy");
   });
 
   test("aggregates validated run events and quarantines malformed lines", async () => {
@@ -365,5 +425,59 @@ describe("state path isolation", () => {
     expect(() => resolveStatePaths("/workspace", "../../outside")).toThrow(
       "filesystem-safe identifier",
     );
+  });
+});
+
+describe("token calibration derivation", () => {
+  const samples = (over: Partial<Record<string, number>> = {}) => ({
+    calibrationByProvider: {
+      "claude-code": {
+        reservedInputTokens: 1_000,
+        reportedInputTokens: 76_000,
+        reservedOutputTokens: 10_000,
+        reportedOutputTokens: 1_000,
+        samples: 3,
+        ...over,
+      },
+    },
+  });
+
+  test("derives the observed input and output ratios", () => {
+    const calibration = deriveCalibration(samples(), "claude-code");
+    expect(calibration?.inputRatio).toBeCloseTo(76, 5);
+    expect(calibration?.outputRatio).toBeCloseTo(0.1, 5);
+    expect(calibration?.samples).toBe(3);
+  });
+
+  test("withholds a ratio below the minimum sample count", () => {
+    expect(
+      deriveCalibration(samples({ samples: MIN_CALIBRATION_SAMPLES - 1 }), "claude-code"),
+    ).toBeUndefined();
+  });
+
+  test("returns undefined for a provider with no history", () => {
+    expect(deriveCalibration(samples(), "codex")).toBeUndefined();
+  });
+
+  test("clamps a pathological ratio", () => {
+    const calibration = deriveCalibration(
+      samples({ reservedInputTokens: 1, reportedInputTokens: 10_000_000 }),
+      "claude-code",
+    );
+    expect(calibration?.inputRatio).toBe(MAX_CALIBRATION_RATIO);
+  });
+
+  test("withholds a ratio when neither axis has usable data", () => {
+    expect(
+      deriveCalibration(
+        samples({
+          reservedInputTokens: 0,
+          reportedInputTokens: 0,
+          reservedOutputTokens: 0,
+          reportedOutputTokens: 0,
+        }),
+        "claude-code",
+      ),
+    ).toBeUndefined();
   });
 });

@@ -217,7 +217,7 @@ function defaultClaudeArgs(context: ExecutionContext): readonly string[] {
     "--max-turns",
     String(maxTurns(context.route.effort)),
     "--max-budget-usd",
-    String(context.step.maxCostUsd),
+    String(context.costCeilingUsd),
     "--permission-mode",
     context.route.tools.some((tool) => tool === "Edit" || tool === "Write")
       ? "acceptEdits"

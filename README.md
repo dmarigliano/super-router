@@ -296,6 +296,30 @@ bun run src/cli.ts plan --config ./examples/priced-demo.config.json --quality-fl
 Raising the floor keeps the cheaper model and buys the quality with effort instead of switching to
 the premium route, which is the escalation ladder described above.
 
+### Estimate accuracy
+
+The token estimator measures the prompt Super Router builds. A coding runtime also charges for its
+own system prompt, ambient user instructions, the files the agent reads during the turn, and context
+resent on later turns, so the reported input is expected to be much larger. That gap is recorded
+rather than assumed: each step stores its reservation beside the provider-reported usage, and `stats`
+prints the resulting ratio.
+
+```text
+Estimate accuracy vs provider: input=23.2x under output=13.3x over
+  reserved input=4152 output=14999 | reported input=96123 output=1129
+```
+
+The line is omitted until at least one step has recorded both numbers. Once a provider has three
+such observations, later reservations for it are scaled by the observed input ratio, which is what
+makes `--max-cost` and `--max-input-tokens` bind against realistic figures instead of a prediction
+already known to be low. Only ratios above 1 are applied: an observed overestimate must not shrink a
+reservation, because the input reservation and `outputBudget` are ceilings rather than forecasts.
+Ratios are clamped to a bounded range so a single pathological run cannot distort later estimates,
+and with too little history no correction is applied at all.
+
+Calibration narrows the error; it does not remove it. Treat the ratio as an operational signal, not
+as billing-grade accounting.
+
 Important defaults:
 
 - Provider: Claude Code subscription CLI
@@ -444,7 +468,13 @@ escalations, cache hit rate, manual overrides, rollback rate, and unauthorized-a
   filesystem, process, or network effect inside a provider runtime.
 - `--trust-project` is a trust declaration, not a sandbox. Project package scripts, compiler
   plugins, and test configuration can execute arbitrary code with the invoking user's OS access.
-- Input-token admission uses a conservative provider-neutral estimator, not an exact tokenizer.
+- Input-token admission uses a conservative provider-neutral estimator, not an exact tokenizer, and
+  it measures only the prompt Super Router builds. A coding runtime also charges for its own system
+  prompt, ambient user instructions, every file the agent reads during the turn, and context resent
+  on later turns, so the reported input is expected to be far above the estimate. On a measured
+  three-node read-only Claude Code run the reservation was 4,152 input tokens against 96,123
+  reported — 23x. That difference is a function of agent behaviour at runtime and cannot be computed
+  from the prompt, so it is measured instead: see [Estimate accuracy](#estimate-accuracy) below.
   Claude Code and Codex receive an approximate output-token instruction, while their local process
   transport defaults to a 16 MiB capture cap; that byte cap is not a hard provider output-token
   stop. BYOK APIs use their provider-specific output-token request fields.

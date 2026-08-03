@@ -492,6 +492,196 @@ describe("DAG structural limits", () => {
 });
 
 describe("runtime budget hardening", () => {
+  test("enforces the token budget against provider-reported usage, not the estimate", async () => {
+    // The pre-run estimate is 100 input tokens per node while the provider reports
+    // 9,950. If the ledger enforced against estimates, both nodes would run inside
+    // a 10,000-token budget. Reconciling on actuals is what stops the second one.
+    let executions = 0;
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async (context) => {
+        executions += 1;
+        return {
+          output: `step ${context.step.id} done`,
+          artifacts: [],
+          usage: {
+            inputTokens: 9_950,
+            outputTokens: 10,
+            reasoningTokens: 0,
+            cachedInputTokens: 0,
+            costUsd: 0,
+            durationMs: 1,
+          },
+        };
+      },
+    };
+
+    const first = testNode("first");
+    const second = testNode("second", ["first"]);
+    const executionPlan = planWithNodes([first, second]);
+    expect(executionPlan.task.budget.maxInputTokens).toBe(10_000);
+    expect(first.routeRequest.expectedInputTokens).toBe(100);
+
+    const result = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+    }).execute(executionPlan, process.cwd());
+
+    expect(executions).toBe(1);
+    expect(result.steps[0]?.state).toBe("verified");
+    expect(result.steps[1]?.error ?? "").toMatch(/[Ii]nput-token budget/);
+    expect(result.usage.inputTokens).toBe(9_950);
+  });
+
+  test("scales the reservation by the observed provider ratio", async () => {
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async () => ({
+        output: "done",
+        artifacts: [],
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: 0,
+          durationMs: 1,
+        },
+      }),
+    };
+
+    const uncalibrated = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+    }).execute(plan(), process.cwd());
+    const baseline = uncalibrated.steps[0]?.reservedUsage?.inputTokens ?? 0;
+    expect(baseline).toBeGreaterThan(0);
+
+    const calibrated = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+      calibration: () => ({ inputRatio: 20, outputRatio: 1, samples: 5 }),
+    }).execute(plan(), process.cwd());
+
+    expect(calibrated.steps[0]?.reservedUsage?.inputTokens).toBe(baseline * 20);
+  });
+
+  test("ignores a calibration that would shrink the reservation", async () => {
+    // An observed overestimate must not loosen the bound: outputBudget and the
+    // input reservation are ceilings, and scaling them down would admit work the
+    // uncalibrated path refused.
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async () => ({
+        output: "done",
+        artifacts: [],
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: 0,
+          durationMs: 1,
+        },
+      }),
+    };
+    const baseline = (
+      await new DagScheduler({ adapters: [adapter], verifier: passingVerification }).execute(
+        plan(),
+        process.cwd(),
+      )
+    ).steps[0]?.reservedUsage?.inputTokens;
+
+    const shrunk = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+      calibration: () => ({ inputRatio: 0.1, outputRatio: 0.1, samples: 9 }),
+    }).execute(plan(), process.cwd());
+
+    expect(shrunk.steps[0]?.reservedUsage?.inputTokens).toBe(baseline);
+  });
+
+  test("caps a step at the remaining task budget, not just its own node share", async () => {
+    // Budget enforcement is applied between steps, so an oversized single step
+    // completes and only the next one is refused. The provider therefore needs a
+    // ceiling derived from what is actually left, not from the node's fixed share
+    // of a plan whose estimates are known to be far below reality.
+    const ceilings: number[] = [];
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async (context) => {
+        ceilings.push(context.costCeilingUsd);
+        return {
+          output: "done",
+          artifacts: [],
+          usage: {
+            inputTokens: 10,
+            outputTokens: 5,
+            reasoningTokens: 0,
+            cachedInputTokens: 0,
+            costUsd: 0,
+            durationMs: 1,
+          },
+        };
+      },
+    };
+
+    const executionPlan = plan();
+    const node = executionPlan.nodes[0];
+    if (!node) throw new Error("fixture node missing");
+    node.maxCostUsd = 5;
+    executionPlan.task.budget.maxCostUsd = 1;
+
+    await new DagScheduler({ adapters: [adapter], verifier: passingVerification }).execute(
+      executionPlan,
+      process.cwd(),
+    );
+
+    expect(ceilings).toHaveLength(1);
+    // The node would have claimed 5; only 1 remains for the whole task.
+    expect(ceilings[0]).toBe(1);
+  });
+
+  test("records the reservation beside reported usage so the gap is measurable", async () => {
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async () => ({
+        output: "done",
+        artifacts: [],
+        usage: {
+          inputTokens: 5_000,
+          outputTokens: 25,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: 0,
+          durationMs: 1,
+        },
+      }),
+    };
+    const events: Array<{ type: string; payload?: unknown }> = [];
+    const result = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+      telemetry: { record: async (event) => void events.push(event) },
+    }).execute(plan(), process.cwd());
+
+    const step = result.steps[0];
+    expect(step?.state).toBe("verified");
+    expect(step?.reservedUsage?.inputTokens).toBeGreaterThan(0);
+    expect(step?.usage.inputTokens).toBe(5_000);
+    // The reservation covers Super Router's prompt only, so it must be far below
+    // what the provider reported. That difference is the point of recording it.
+    expect(step?.reservedUsage?.inputTokens).toBeLessThan(step?.usage.inputTokens ?? 0);
+
+    const finished = events.find((event) => event.type === "step.finished");
+    expect(finished?.payload).toHaveProperty("reservedUsage");
+  });
+
   test("bounds a telemetry sink that never resolves and continues fail-safe", async () => {
     let availabilityChecks = 0;
     let executions = 0;
