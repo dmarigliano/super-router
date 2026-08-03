@@ -27,6 +27,7 @@ import {
   type PolicyDecision,
 } from "../security/policy.ts";
 import { redactText } from "../security/redaction.ts";
+import type { TokenCalibration } from "../stats.ts";
 import type { TelemetryEvent, TelemetrySink } from "../telemetry/jsonl.ts";
 import { NullTelemetry, sanitizeTelemetryEvent } from "../telemetry/jsonl.ts";
 import { estimateTokens } from "../utils.ts";
@@ -90,7 +91,15 @@ export interface DagSchedulerDependencies {
   telemetry?: TelemetrySink;
   policy?: OperationalPolicy;
   workspaceChangeDetector?: WorkspaceChangeDetector;
+  /**
+   * Scales a reservation by what this provider was previously observed to charge.
+   * Returning undefined leaves the estimate untouched, which is the honest
+   * default: with no history there is nothing to correct toward.
+   */
+  calibration?: CalibrationLookup;
 }
+
+export type CalibrationLookup = (provider: string) => TokenCalibration | undefined;
 
 interface CompletedNode {
   id: string;
@@ -126,6 +135,7 @@ export class DagScheduler {
   readonly #telemetry: TelemetrySink;
   readonly #policy: OperationalPolicy | undefined;
   readonly #workspaceChangeDetector: WorkspaceChangeDetector;
+  readonly #calibration: CalibrationLookup | undefined;
   readonly #runBudgets = new WeakMap<SchedulerOptions, BudgetLedger>();
 
   constructor(dependencies: DagSchedulerDependencies) {
@@ -135,6 +145,7 @@ export class DagScheduler {
     this.#policy = dependencies.policy;
     this.#workspaceChangeDetector =
       dependencies.workspaceChangeDetector ?? new BoundedWorkspaceChangeDetector();
+    this.#calibration = dependencies.calibration;
   }
 
   async execute(
@@ -614,7 +625,7 @@ export class DagScheduler {
       }
       const reservation = options.dryRun
         ? { inputTokens: 0, outputTokens: 0, costUsd: 0 }
-        : reservationFor(node, route, promptInputTokens);
+        : reservationFor(node, route, promptInputTokens, this.#calibration?.(route.provider));
       accumulatedReservation.inputTokens += reservation.inputTokens;
       accumulatedReservation.outputTokens += reservation.outputTokens;
       accumulatedReservation.costUsd += reservation.costUsd;
@@ -1699,6 +1710,7 @@ function reservationFor(
   node: PlanNode,
   route: RouteDecision,
   promptInputTokens: number,
+  calibration?: TokenCalibration,
 ): AttemptBudgetReservation {
   const predictedOutputMultiplier: Readonly<Record<RouteDecision["effort"], number>> = {
     economy: 0.72,
@@ -1717,10 +1729,18 @@ function reservationFor(
     promptInputTokens / estimatedInput,
     reservedOutput / estimatedOutput,
   );
+  // The prompt estimate covers what Super Router sends. A provider also charges
+  // for its own system prompt, ambient instructions, files the agent reads during
+  // the turn, and context resent on later turns, so the observed ratio is applied
+  // to input. Output is left alone: it is bounded by outputBudget, which is a hard
+  // per-attempt ceiling rather than a prediction, and scaling it down by an
+  // observed overestimate would weaken that bound.
+  const inputScale = calibration && calibration.inputRatio > 1 ? calibration.inputRatio : 1;
+  const calibratedInput = Math.ceil(Math.max(0, promptInputTokens) * inputScale);
   return {
-    inputTokens: Math.max(0, promptInputTokens),
+    inputTokens: calibratedInput,
     outputTokens: reservedOutput,
-    costUsd: Math.max(0, route.expectedCostUsd * conservativeCostScale),
+    costUsd: Math.max(0, route.expectedCostUsd * conservativeCostScale * inputScale),
   };
 }
 

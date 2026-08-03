@@ -534,6 +534,76 @@ describe("runtime budget hardening", () => {
     expect(result.usage.inputTokens).toBe(9_950);
   });
 
+  test("scales the reservation by the observed provider ratio", async () => {
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async () => ({
+        output: "done",
+        artifacts: [],
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: 0,
+          durationMs: 1,
+        },
+      }),
+    };
+
+    const uncalibrated = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+    }).execute(plan(), process.cwd());
+    const baseline = uncalibrated.steps[0]?.reservedUsage?.inputTokens ?? 0;
+    expect(baseline).toBeGreaterThan(0);
+
+    const calibrated = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+      calibration: () => ({ inputRatio: 20, outputRatio: 1, samples: 5 }),
+    }).execute(plan(), process.cwd());
+
+    expect(calibrated.steps[0]?.reservedUsage?.inputTokens).toBe(baseline * 20);
+  });
+
+  test("ignores a calibration that would shrink the reservation", async () => {
+    // An observed overestimate must not loosen the bound: outputBudget and the
+    // input reservation are ceilings, and scaling them down would admit work the
+    // uncalibrated path refused.
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async () => ({
+        output: "done",
+        artifacts: [],
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: 0,
+          durationMs: 1,
+        },
+      }),
+    };
+    const baseline = (
+      await new DagScheduler({ adapters: [adapter], verifier: passingVerification }).execute(
+        plan(),
+        process.cwd(),
+      )
+    ).steps[0]?.reservedUsage?.inputTokens;
+
+    const shrunk = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+      calibration: () => ({ inputRatio: 0.1, outputRatio: 0.1, samples: 9 }),
+    }).execute(plan(), process.cwd());
+
+    expect(shrunk.steps[0]?.reservedUsage?.inputTokens).toBe(baseline);
+  });
+
   test("caps a step at the remaining task budget, not just its own node share", async () => {
     // Budget enforcement is applied between steps, so an oversized single step
     // completes and only the next one is refused. The provider therefore needs a

@@ -27,6 +27,60 @@ export interface TelemetryStats {
    */
   reserved: ReservedUsageTotals;
   stepUsage: ReservedUsageTotals;
+  /** The same pairing split by provider id, which is the granularity that matters. */
+  calibrationByProvider: Record<string, ProviderCalibrationSamples>;
+}
+
+export interface ProviderCalibrationSamples {
+  reservedInputTokens: number;
+  reportedInputTokens: number;
+  reservedOutputTokens: number;
+  reportedOutputTokens: number;
+  samples: number;
+}
+
+export interface TokenCalibration {
+  inputRatio: number;
+  outputRatio: number;
+  samples: number;
+}
+
+/** Below this many observations a ratio is noise, so the estimate is left alone. */
+export const MIN_CALIBRATION_SAMPLES = 3;
+/**
+ * Ratios are clamped so one pathological run cannot make every later estimate
+ * useless. The upper input bound is generous because provider overhead genuinely
+ * dominates: an observed 76x is real, not an outlier.
+ */
+export const MAX_CALIBRATION_RATIO = 200;
+export const MIN_CALIBRATION_RATIO = 1 / 200;
+
+/**
+ * Derives a multiplier to apply to future estimates for one provider. Returns
+ * undefined when there is not enough evidence, which callers must treat as "leave
+ * the estimate as it is" rather than as a ratio of 1.
+ */
+export function deriveCalibration(
+  stats: Pick<TelemetryStats, "calibrationByProvider">,
+  provider: string,
+): TokenCalibration | undefined {
+  const sample = stats.calibrationByProvider[provider];
+  if (!sample || sample.samples < MIN_CALIBRATION_SAMPLES) return undefined;
+  const inputRatio = ratioOrUndefined(sample.reservedInputTokens, sample.reportedInputTokens);
+  const outputRatio = ratioOrUndefined(sample.reservedOutputTokens, sample.reportedOutputTokens);
+  if (inputRatio === undefined && outputRatio === undefined) return undefined;
+  return {
+    inputRatio: inputRatio ?? 1,
+    outputRatio: outputRatio ?? 1,
+    samples: sample.samples,
+  };
+}
+
+function ratioOrUndefined(reserved: number, reported: number): number | undefined {
+  if (reserved <= 0 || reported <= 0) return undefined;
+  const ratio = reported / reserved;
+  if (!Number.isFinite(ratio)) return undefined;
+  return Math.min(MAX_CALIBRATION_RATIO, Math.max(MIN_CALIBRATION_RATIO, ratio));
 }
 
 export interface ReservedUsageTotals {
@@ -83,6 +137,25 @@ function accumulateReservation(result: TelemetryStats, payload: unknown): void {
   result.stepUsage.inputTokens += usage.inputTokens;
   result.stepUsage.outputTokens += usage.outputTokens;
   result.stepUsage.costUsd += usage.costUsd;
+
+  const provider =
+    isRecord(payload.route) && typeof payload.route.provider === "string"
+      ? payload.route.provider
+      : undefined;
+  if (!provider) return;
+  result.calibrationByProvider[provider] ??= {
+    reservedInputTokens: 0,
+    reportedInputTokens: 0,
+    reservedOutputTokens: 0,
+    reportedOutputTokens: 0,
+    samples: 0,
+  };
+  const bucket = result.calibrationByProvider[provider];
+  bucket.reservedInputTokens += finite(reserved.inputTokens);
+  bucket.reportedInputTokens += usage.inputTokens;
+  bucket.reservedOutputTokens += finite(reserved.outputTokens);
+  bucket.reportedOutputTokens += usage.outputTokens;
+  bucket.samples += 1;
 }
 
 function usageFromPayload(value: unknown): UsageRecord | undefined {
@@ -264,6 +337,7 @@ export async function readTelemetryStats(
     usage: { ...EMPTY_USAGE },
     reserved: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
     stepUsage: { inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    calibrationByProvider: {},
   };
 
   let files: string[];

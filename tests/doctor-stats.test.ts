@@ -6,7 +6,13 @@ import { defaultConfig } from "../src/config.ts";
 import type { ProviderAdapter, ProviderAvailability } from "../src/contracts.ts";
 import { renderDoctorReport, runDoctor } from "../src/doctor.ts";
 import { resolveStatePaths } from "../src/state-paths.ts";
-import { readTelemetryStats, renderTelemetryStats } from "../src/stats.ts";
+import {
+  deriveCalibration,
+  MAX_CALIBRATION_RATIO,
+  MIN_CALIBRATION_SAMPLES,
+  readTelemetryStats,
+  renderTelemetryStats,
+} from "../src/stats.ts";
 
 const temporaryDirectories: string[] = [];
 
@@ -419,5 +425,59 @@ describe("state path isolation", () => {
     expect(() => resolveStatePaths("/workspace", "../../outside")).toThrow(
       "filesystem-safe identifier",
     );
+  });
+});
+
+describe("token calibration derivation", () => {
+  const samples = (over: Partial<Record<string, number>> = {}) => ({
+    calibrationByProvider: {
+      "claude-code": {
+        reservedInputTokens: 1_000,
+        reportedInputTokens: 76_000,
+        reservedOutputTokens: 10_000,
+        reportedOutputTokens: 1_000,
+        samples: 3,
+        ...over,
+      },
+    },
+  });
+
+  test("derives the observed input and output ratios", () => {
+    const calibration = deriveCalibration(samples(), "claude-code");
+    expect(calibration?.inputRatio).toBeCloseTo(76, 5);
+    expect(calibration?.outputRatio).toBeCloseTo(0.1, 5);
+    expect(calibration?.samples).toBe(3);
+  });
+
+  test("withholds a ratio below the minimum sample count", () => {
+    expect(
+      deriveCalibration(samples({ samples: MIN_CALIBRATION_SAMPLES - 1 }), "claude-code"),
+    ).toBeUndefined();
+  });
+
+  test("returns undefined for a provider with no history", () => {
+    expect(deriveCalibration(samples(), "codex")).toBeUndefined();
+  });
+
+  test("clamps a pathological ratio", () => {
+    const calibration = deriveCalibration(
+      samples({ reservedInputTokens: 1, reportedInputTokens: 10_000_000 }),
+      "claude-code",
+    );
+    expect(calibration?.inputRatio).toBe(MAX_CALIBRATION_RATIO);
+  });
+
+  test("withholds a ratio when neither axis has usable data", () => {
+    expect(
+      deriveCalibration(
+        samples({
+          reservedInputTokens: 0,
+          reportedInputTokens: 0,
+          reservedOutputTokens: 0,
+          reportedOutputTokens: 0,
+        }),
+        "claude-code",
+      ),
+    ).toBeUndefined();
   });
 });
