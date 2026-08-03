@@ -706,5 +706,6 @@ function executionContext(provider = "claude-code", model = "sonnet"): Execution
     route,
     prompt: "test",
     timeoutMs: 1_000,
+    costCeilingUsd: step.maxCostUsd,
   };
 }

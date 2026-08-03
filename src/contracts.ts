@@ -306,6 +306,14 @@ export interface ExecutionContext {
   prompt: string;
   materializedCapabilities?: MaterializedRouteCapabilities;
   timeoutMs: number;
+  /**
+   * Hard spend ceiling for this attempt: the lower of the node's own share and
+   * what remains of the task budget. Adapters that can bound a provider run must
+   * use this rather than `step.maxCostUsd`, because the ledger only reconciles
+   * between steps — without an in-step ceiling a single attempt can overshoot the
+   * whole task budget before the next step is refused.
+   */
+  costCeilingUsd: number;
 }
 
 export interface ProviderExecutionResult {

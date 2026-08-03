@@ -618,6 +618,9 @@ export class DagScheduler {
       accumulatedReservation.inputTokens += reservation.inputTokens;
       accumulatedReservation.outputTokens += reservation.outputTokens;
       accumulatedReservation.costUsd += reservation.costUsd;
+      // Captured before reserving: this attempt's own reservation must not shrink
+      // the ceiling it is being given.
+      const costCeilingUsd = Math.min(node.maxCostUsd, ledger.remainingCostUsd());
       const budgetDecision = ledger.reserve(node.id, reservation, node.maxCostUsd);
       if (!budgetDecision.allowed) {
         await this.#record(
@@ -726,6 +729,7 @@ export class DagScheduler {
           prompt,
           ...(materializedCapabilities ? { materializedCapabilities } : {}),
           timeoutMs: providerTimeoutMs,
+          costCeilingUsd,
           ...(options.signal ? { signal: options.signal } : {}),
         };
         const providerResult = await runWithinBudget(
@@ -1189,6 +1193,12 @@ class BudgetLedger {
 
   remainingDurationMs(): number {
     return Math.max(0, this.#budget.maxDurationMs - (this.#clock() - this.#startedAtMs));
+  }
+
+  /** Unspent task cost, counting committed usage and outstanding reservations. */
+  remainingCostUsd(): number {
+    const reserved = this.#reservedTotals();
+    return Math.max(0, this.#budget.maxCostUsd - this.#consumed.costUsd - reserved.costUsd);
   }
 
   exhaustionReason(nodeId: string, nodeMaxCostUsd: number): string | undefined {

@@ -534,6 +534,48 @@ describe("runtime budget hardening", () => {
     expect(result.usage.inputTokens).toBe(9_950);
   });
 
+  test("caps a step at the remaining task budget, not just its own node share", async () => {
+    // Budget enforcement is applied between steps, so an oversized single step
+    // completes and only the next one is refused. The provider therefore needs a
+    // ceiling derived from what is actually left, not from the node's fixed share
+    // of a plan whose estimates are known to be far below reality.
+    const ceilings: number[] = [];
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async (context) => {
+        ceilings.push(context.costCeilingUsd);
+        return {
+          output: "done",
+          artifacts: [],
+          usage: {
+            inputTokens: 10,
+            outputTokens: 5,
+            reasoningTokens: 0,
+            cachedInputTokens: 0,
+            costUsd: 0,
+            durationMs: 1,
+          },
+        };
+      },
+    };
+
+    const executionPlan = plan();
+    const node = executionPlan.nodes[0];
+    if (!node) throw new Error("fixture node missing");
+    node.maxCostUsd = 5;
+    executionPlan.task.budget.maxCostUsd = 1;
+
+    await new DagScheduler({ adapters: [adapter], verifier: passingVerification }).execute(
+      executionPlan,
+      process.cwd(),
+    );
+
+    expect(ceilings).toHaveLength(1);
+    // The node would have claimed 5; only 1 remains for the whole task.
+    expect(ceilings[0]).toBe(1);
+  });
+
   test("records the reservation beside reported usage so the gap is measurable", async () => {
     const adapter: ProviderAdapter = {
       id: "test-provider",
