@@ -147,6 +147,28 @@ describe("CLI option parsing", () => {
   ] as const)("rejects malformed argv %o", (argv, message) => {
     expect(() => parseCliOptions([...argv])).toThrow(message);
   });
+
+  test("recognizes integrations instead of treating it as a run prompt", () => {
+    const options = parseCliOptions(["integrations", "install", "--all", "--scope", "user"]);
+    expect(options.command).toBe("integrations");
+    expect(options.prompt).toBe("");
+  });
+
+  test("passes installer flags through without router option parsing", () => {
+    // `--all`, `--project-dir`, and `--force` belong to the installer. Before the
+    // command was recognized, argv fell through to the `run` alias and these
+    // raised `Unknown option`.
+    for (const flag of ["--all", "--codex", "--claude-code", "--force", "--dry-run"]) {
+      expect(() => parseCliOptions(["integrations", "install", flag])).not.toThrow();
+    }
+    expect(() =>
+      parseCliOptions(["integrations", "install", "--scope", "project", "--project-dir", "/tmp/x"]),
+    ).not.toThrow();
+  });
+
+  test("help text points source checkouts at the installer script", () => {
+    expect(helpText).toContain("node scripts/install-integrations.mjs");
+  });
 });
 
 describe("project-aware verification discovery", () => {

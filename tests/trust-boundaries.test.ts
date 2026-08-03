@@ -56,6 +56,17 @@ describe("project-local configuration trust boundary", () => {
         { memory: { persistRawPrompts: true } },
         "Project-local configuration cannot enable raw prompt persistence",
       ],
+      // Silencing the audit trail is authority over evidence, not a routing
+      // preference: an untrusted checkout could install NullTelemetry for every
+      // run in it while doctor still reported telemetry as active.
+      [
+        { telemetry: { enabled: false } },
+        "Project-local configuration cannot disable telemetry or memory",
+      ],
+      [
+        { memory: { enabled: false } },
+        "Project-local configuration cannot disable telemetry or memory",
+      ],
     ];
 
     for (const [value, message] of cases) {

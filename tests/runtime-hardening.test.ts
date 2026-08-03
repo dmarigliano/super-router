@@ -442,6 +442,53 @@ describe("DAG structural limits", () => {
       expect(effectExecutions).toBe(0);
     },
   );
+
+  test("refuses a node that flags itself for approval instead of binding a gate", async () => {
+    // The exemption exists so a one-time gate can present a protected action; a
+    // gate is bound to a distinct node via approvalForNodeId. A caller-supplied
+    // node that only sets requireHumanApproval on itself is not a gate, and used
+    // to skip the refusal and reach the adapter.
+    let availabilityChecks = 0;
+    let executions = 0;
+    const adapter: ProviderAdapter = {
+      id: "self-approving-provider",
+      isAvailable: async () => {
+        availabilityChecks += 1;
+        return true;
+      },
+      execute: async () => {
+        executions += 1;
+        throw new Error("self-approving destructive node must not execute");
+      },
+    };
+
+    const node = testNode("self-approving");
+    node.objective = "drop table users on the reporting replica";
+    node.expectedArtifact = { type: "document", description: "destructive change record" };
+    node.verification.requireHumanApproval = true;
+    delete node.verification.approvalForNodeId;
+    if (!node.route) throw new Error("test fixture route is missing");
+    node.route.provider = "self-approving-provider";
+
+    const executionPlan = planWithNodes([node]);
+    executionPlan.task.requiresHumanApproval = false;
+    executionPlan.task.riskLevel = "medium";
+
+    const result = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerificationWithHumanEvidence,
+      policy: new OperationalPolicy({
+        allowExternalWrites: true,
+        allowDestructiveActions: true,
+        approvalHandler: async () => true,
+      }),
+    }).execute(executionPlan, process.cwd());
+
+    expect(result.state).toBe("failed");
+    expect(result.steps[0]?.error).toContain("destructive effects are unsupported");
+    expect(availabilityChecks).toBe(0);
+    expect(executions).toBe(0);
+  });
 });
 
 describe("runtime budget hardening", () => {

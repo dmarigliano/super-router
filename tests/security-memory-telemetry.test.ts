@@ -9,7 +9,7 @@ import {
   minimalVerificationEnvironment,
   SafeVerificationRunner,
 } from "../src/runtime/verification.ts";
-import { sanitizeTerminalText } from "../src/security/redaction.ts";
+import { redactText, sanitizeTerminalText } from "../src/security/redaction.ts";
 import { JsonlTelemetry } from "../src/telemetry/jsonl.ts";
 
 const temporaryDirectories: string[] = [];
@@ -310,6 +310,23 @@ describe("local memory integrity", () => {
     await expect(store.get([entry.id], "project")).rejects.toThrow("integrity check failed");
   });
 
+  test("returns a document whose content grew during redaction", async () => {
+    // validateInput measures the raw content, but ASSIGNMENT_PATTERN replaces a
+    // >=6-character value with the 10-character [REDACTED], so accepted input can
+    // cross the cap while being stored. The record used to be written and indexed
+    // and then permanently refused by its own reader.
+    const directory = await temporaryDirectory("super-router-memory-grow-");
+    const store = new LocalMemoryStore({ directory, maxContentLength: 64 });
+    const raw = "secret=abcdef ".repeat(4);
+    expect(raw.length).toBeLessThanOrEqual(64);
+
+    const entry = await store.remember({ ...memoryObservation("grown"), content: raw });
+    const documents = await store.get([entry.id], "project");
+    expect(documents).toHaveLength(1);
+    expect(documents[0]?.content.length).toBeLessThanOrEqual(64);
+    expect(documents[0]?.content).not.toContain("abcdef");
+  });
+
   test("rejects symbolic-link and oversized memory documents before parsing", async () => {
     const directory = await temporaryDirectory("super-router-memory-doc-bounds-");
     const store = new LocalMemoryStore({ directory });
@@ -406,6 +423,26 @@ describe("local memory integrity", () => {
     expect(
       () => new LocalMemoryStore({ directory, maxIndexRecords: Number.MAX_SAFE_INTEGER }),
     ).toThrow("maxIndexRecords must be a positive integer");
+  });
+});
+
+describe("redaction bounds", () => {
+  test.each([
+    ["grows during redaction", "secret=abcdef ".repeat(4), 64],
+    ["already over the limit", "x".repeat(100), 20],
+    ["limit smaller than the truncation marker", "x".repeat(100), 5],
+    ["limit of zero", "x".repeat(10), 0],
+  ] as const)("never returns more than maxStringLength when it %s", (_case, input, limit) => {
+    expect(redactText(input, { maxStringLength: limit }).length).toBeLessThanOrEqual(limit);
+  });
+
+  test("still marks that content was truncated when there is room", () => {
+    expect(redactText("x".repeat(100), { maxStringLength: 60 })).toContain("TRUNCATED");
+  });
+
+  test("leaves content at or under the limit untouched", () => {
+    expect(redactText("hello", { maxStringLength: 5 })).toBe("hello");
+    expect(redactText("hello", { maxStringLength: 99 })).toBe("hello");
   });
 });
 

@@ -202,6 +202,13 @@ acknowledges that the selected coding runtime and discovered verification comman
 from the workspace. Planning, capability discovery, and `doctor` do not require that trust. Never
 use the flag for a repository you have not reviewed; use a disposable OS sandbox instead.
 
+The bundled Codex and Claude Code skills do not surface that choice: their wrapper adds
+`--trust-project` to every `run` and `dry-run` invocation, and its argument contract accepts only a
+mode and an objective, so there is no form that withholds the flag. `plan` never adds it. Treat
+invoking those skills in a checkout as the same declaration this section describes, and make it from
+the repository you intend to trust — the working directory decides whose code executes, not the mode
+word. See [the native integration guide](./integrations/README.md) for the exact boundary.
+
 The gate is at the plan-node/provider boundary, not a system-call proxy around a third-party coding
 runtime. Keep the provider's own sandbox and permission prompts enabled for supported local work;
 0.8 cannot intercept every effect a compromised runtime or prompt-injected tool might attempt.
@@ -262,9 +269,30 @@ external, destructive, or raw-prompt authority. Configuration is resolved in thi
 3. `./super-router.config.json` (untrusted project-local preferences).
 4. Secure built-in defaults.
 
+A project-local file also cannot disable telemetry or memory. Silencing the redacted audit trail is
+authority over evidence rather than a routing preference, so use a trusted configuration for a
+permanent change or `--no-memory` for one ephemeral task.
+
 Use the [explicit provider catalog](./examples/providers.config.json) only through `--config` or
 `SUPER_ROUTER_CONFIG`. Credentials remain in the environment, never in JSON. See the
 [provider guide](./docs/PROVIDERS.md) for the supported boundaries.
+
+### Seeing the route decision
+
+Subscription adapters carry zero incremental price in the default catalog, so every stage of a
+default plan reports `$0.0000` and the selector's economics are invisible.
+[`examples/priced-demo.config.json`](./examples/priced-demo.config.json) prices two routes so the
+decision can be read directly. Its numbers are illustrative and are not a price list.
+
+```bash
+bun run src/cli.ts plan --config ./examples/priced-demo.config.json --quality-floor 0.88 \
+  "Review the authentication module"
+bun run src/cli.ts plan --config ./examples/priced-demo.config.json --quality-floor 0.95 \
+  "Review the authentication module"
+```
+
+Raising the floor keeps the cheaper model and buys the quality with effort instead of switching to
+the premium route, which is the escalation ladder described above.
 
 Important defaults:
 

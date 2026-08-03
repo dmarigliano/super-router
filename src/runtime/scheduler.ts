@@ -319,7 +319,7 @@ export class DagScheduler {
     const actionKind = classifyNodeAction(node);
     if (
       !options.dryRun &&
-      !node.verification.requireHumanApproval &&
+      !isApprovalGateNode(node) &&
       (actionKind === "external-write" || actionKind === "destructive")
     ) {
       const unsupported = terminalStep(
@@ -1595,6 +1595,23 @@ function nodeRequiresPlanApproval(plan: ExecutionPlan, node: PlanNode): boolean 
   return (
     (plan.task.requiresHumanApproval || plan.task.riskLevel === "critical") &&
     classifyNodeAction(node) !== "read"
+  );
+}
+
+/**
+ * A one-time approval gate carries the protected action's text, so it classifies
+ * as that action while performing no effect itself. Only a gate bound to a
+ * distinct node is exempt from the 0.8 external/destructive refusal; a node that
+ * merely raises `requireHumanApproval` on itself is the effecting node and must
+ * still be refused before provider availability or execution.
+ */
+function isApprovalGateNode(node: PlanNode): boolean {
+  const target = node.verification.approvalForNodeId;
+  return (
+    node.verification.requireHumanApproval &&
+    typeof target === "string" &&
+    target.length > 0 &&
+    target !== node.id
   );
 }
 
