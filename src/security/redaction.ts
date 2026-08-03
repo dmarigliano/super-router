@@ -61,7 +61,14 @@ export function redactText(value: string, options: RedactionOptions = {}): strin
 
   const limit = options.maxStringLength;
   if (limit !== undefined && limit >= 0 && redacted.length > limit) {
-    return `${redacted.slice(0, limit)}...[TRUNCATED ${redacted.length - limit} chars]`;
+    // The marker has to fit inside the limit, not extend past it: callers persist
+    // this value under a cap of the same number and re-validate it on read, so
+    // returning limit + marker characters produced records their own reader
+    // refused. The marker reports the original length because the number of
+    // dropped characters depends on the marker's own width.
+    const marker = `...[TRUNCATED from ${redacted.length} chars]`;
+    if (marker.length > limit) return redacted.slice(0, limit);
+    return `${redacted.slice(0, limit - marker.length)}${marker}`;
   }
   return redacted;
 }
