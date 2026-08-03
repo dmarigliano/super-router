@@ -492,6 +492,48 @@ describe("DAG structural limits", () => {
 });
 
 describe("runtime budget hardening", () => {
+  test("enforces the token budget against provider-reported usage, not the estimate", async () => {
+    // The pre-run estimate is 100 input tokens per node while the provider reports
+    // 9,950. If the ledger enforced against estimates, both nodes would run inside
+    // a 10,000-token budget. Reconciling on actuals is what stops the second one.
+    let executions = 0;
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async (context) => {
+        executions += 1;
+        return {
+          output: `step ${context.step.id} done`,
+          artifacts: [],
+          usage: {
+            inputTokens: 9_950,
+            outputTokens: 10,
+            reasoningTokens: 0,
+            cachedInputTokens: 0,
+            costUsd: 0,
+            durationMs: 1,
+          },
+        };
+      },
+    };
+
+    const first = testNode("first");
+    const second = testNode("second", ["first"]);
+    const executionPlan = planWithNodes([first, second]);
+    expect(executionPlan.task.budget.maxInputTokens).toBe(10_000);
+    expect(first.routeRequest.expectedInputTokens).toBe(100);
+
+    const result = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+    }).execute(executionPlan, process.cwd());
+
+    expect(executions).toBe(1);
+    expect(result.steps[0]?.state).toBe("verified");
+    expect(result.steps[1]?.error ?? "").toMatch(/[Ii]nput-token budget/);
+    expect(result.usage.inputTokens).toBe(9_950);
+  });
+
   test("bounds a telemetry sink that never resolves and continues fail-safe", async () => {
     let availabilityChecks = 0;
     let executions = 0;
