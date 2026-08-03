@@ -19,9 +19,10 @@ and records redacted evidence.
 ## Project status
 
 Current source version: **0.8.0 — executable local MVP and release candidate**. This repository does
-not claim that 0.8.0 has already been published to npm. The public `main` source has passed its
-hosted [CI](https://github.com/dmarigliano/super-router/actions/runs/30730972945) and
-[CodeQL](https://github.com/dmarigliano/super-router/actions/runs/30730972926) checks and is usable
+not claim that 0.8.0 has already been published to npm; the `v0.8.0` Git tag and GitHub release do
+exist. The public `main` source has passed its hosted
+[CI](https://github.com/dmarigliano/super-router/actions/runs/30827438979) and
+[CodeQL](https://github.com/dmarigliano/super-router/actions/runs/30827439097) checks and is usable
 from a reviewed source checkout through the steps below.
 
 | Capability | Status |
@@ -156,7 +157,8 @@ super-router integrations install --all --scope user
 The installer also supports `--codex`, `--claude-code`, project scope with an explicit
 `--project-dir`, and a managed `uninstall` action. From a reviewed source checkout, the equivalent
 entry point is `node scripts/install-integrations.mjs ...`. Marketplace installation depends on a
-public repository and release tag, so it must not be treated as available until those exist. See
+public repository and release tag; both now exist as of `v0.8.0`, but the `super-router` executable
+it wires up still comes from the npm package, so treat that step as pending publication. See
 [the native integration guide](./integrations/README.md) for the exact Codex and Claude Code flows
 and security boundary.
 

@@ -10,11 +10,61 @@ after the 1.0 release. During `0.x`, minor versions may include breaking changes
 
 No changes recorded yet.
 
-## [0.8.0] - 2026-08-01
+## [0.8.0] - 2026-08-03
 
 Release-candidate source entry. This changelog does not claim that the npm
-package, Git tag, or GitHub release already exists; verify each distribution
-channel independently before installation.
+package already exists; verify that distribution channel independently before
+installation.
+
+The entries below were recorded on 2026-08-01 and then amended on 2026-08-03
+with the fixes in the `### Fixed` section, before any tag or release existed.
+Because 0.8.0 was never published, those fixes are part of this version rather
+than a successor to it.
+
+### Fixed
+
+- Destructive command syntax is classified at intake. `rm -rf`,
+  `git reset --hard`, and `mkfs /dev/...` carry no destructive word form, and
+  prompt normalization strips the operators they depend on, so they were
+  classified `risk: low` with no human approval gate while the policy patterns
+  that match them already existed. `classifyPrompt` now applies `classifyAction`
+  to the raw prompt: a matched destructive command escalates to `critical`, and
+  external-write syntax raises the approval flag. Adds five command-syntax eval
+  cases across English, Portuguese, and Spanish; the previous suite's seven
+  approval cases were all natural language and shared the classifier's blind
+  spot.
+- The external/destructive execution refusal is unconditional again. It was
+  skipped for any node carrying `requireHumanApproval`, so a caller-supplied plan
+  could reach a provider with the human consulted only afterwards. Only an
+  approval gate bound to a distinct node through `approvalForNodeId` is exempt.
+  The deterministic planner never produced such a node and the CLI could not
+  reach the path, but `DagScheduler` is public API.
+- `redactText` honors `maxStringLength`. The truncation branch appended its
+  marker past the requested bound, so a value stored under a cap could exceed it
+  and be permanently refused by its own reader while still holding an index slot.
+- An untrusted project-local configuration can no longer disable telemetry or
+  memory. `telemetry.enabled` and `memory.enabled` join the trust deny-list;
+  silencing the redacted audit trail is authority over evidence, not a routing
+  preference. Use a trusted configuration or `--no-memory` instead.
+- `integrations` is recognized by the router entry point. The command is served
+  by `bin/super-router.js`, so starting the router directly from a source
+  checkout fell through to the `run` alias and reported an unknown option or
+  demanded workspace trust. It now fails naming both working entry points.
+
+### Changed
+
+- `typescript` moved to `^7.0.2`. All added lockfile entries are the optional
+  `@typescript/typescript-<platform>` native binaries and remain
+  devDependencies, so the published package is unaffected.
+- The `--trust-project` documentation notes that the bundled Codex and Claude
+  Code wrappers add the flag to every `run` and `dry-run` and accept no argument
+  form that withholds it.
+- Adds `examples/priced-demo.config.json`. Subscription adapters carry zero
+  incremental price by default, so route economics printed `$0.0000` at every
+  stage and could not be observed; the demo catalog prices two routes so the
+  selector's decision can be read directly. Its prices are illustrative.
+- Test coverage of the provider adapter factory went from 0% to 100% of
+  functions. Suite totals: 306 -> 326 tests, eval 46 -> 51 cases.
 
 ### Added
 
