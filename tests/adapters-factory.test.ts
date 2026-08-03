@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { createProviderAdapters } from "../src/adapters/factory.ts";
-import type { ProcessInvocation, ProcessRunner } from "../src/adapters/process-runner.ts";
+import type { ProcessResult, ProcessRunner } from "../src/adapters/process-runner.ts";
 import { defaultConfig } from "../src/config.ts";
 import type { ProviderConfig, RouterConfig } from "../src/contracts.ts";
+
+function processResult(stdout = ""): ProcessResult {
+  return { stdout, stderr: "", exitCode: 0, signal: null, durationMs: 0, timedOut: false };
+}
 
 function configWithProviders(providers: ProviderConfig[], dryRun = false): RouterConfig {
   return { ...structuredClone(defaultConfig), providers, dryRun };
@@ -14,15 +18,7 @@ function provider(overrides: Partial<ProviderConfig> & { id: string }): Provider
   return { ...template, ...overrides };
 }
 
-const noopRunner: ProcessRunner = {
-  run: async (_invocation: ProcessInvocation) => ({
-    stdout: "",
-    stderr: "",
-    exitCode: 0,
-    timedOut: false,
-    truncated: false,
-  }),
-};
+const noopRunner: ProcessRunner = { run: async () => processResult() };
 
 describe("provider adapter factory", () => {
   test("builds an adapter only for each enabled provider", () => {
@@ -107,7 +103,7 @@ describe("provider adapter factory", () => {
     const recorder = (key: string): ProcessRunner => ({
       run: async (invocation) => {
         seen[key]?.push(invocation.executable);
-        return { stdout: "{}", stderr: "", exitCode: 0, timedOut: false, truncated: false };
+        return processResult("{}");
       },
     });
     const adapters = createProviderAdapters(

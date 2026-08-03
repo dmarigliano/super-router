@@ -1,0 +1,72 @@
+{
+  "preferredProvider": "claude-code",
+  "qualityFloor": 0.88,
+  "providers": [
+    {
+      "id": "claude-code",
+      "enabled": true,
+      "transport": "cli",
+      "billingMode": "metered",
+      "executable": "claude",
+      "defaultModel": "opus",
+      "models": [
+        {
+          "provider": "claude-code",
+          "model": "sonnet",
+          "displayName": "Cheaper mid-tier route (demonstration prices)",
+          "taskTypes": [
+            "implement",
+            "fix",
+            "review",
+            "research",
+            "design",
+            "refactor",
+            "test",
+            "document",
+            "optimize",
+            "security-audit",
+            "debug"
+          ],
+          "domains": ["general"],
+          "supportedEfforts": ["economy", "balanced", "deep"],
+          "tools": ["Read", "Glob", "Grep", "Edit", "Write"],
+          "contextWindow": 200000,
+          "maxOutputTokens": 32000,
+          "inputCostPerMillion": 3,
+          "outputCostPerMillion": 15,
+          "qualityPrior": 0.9,
+          "latencyPriorMs": 8000,
+          "enabled": true
+        },
+        {
+          "provider": "claude-code",
+          "model": "opus",
+          "displayName": "Premium route (demonstration prices)",
+          "taskTypes": [
+            "implement",
+            "fix",
+            "review",
+            "research",
+            "design",
+            "refactor",
+            "test",
+            "document",
+            "optimize",
+            "security-audit",
+            "debug"
+          ],
+          "domains": ["general"],
+          "supportedEfforts": ["balanced", "deep", "max"],
+          "tools": ["Read", "Glob", "Grep", "Edit", "Write"],
+          "contextWindow": 200000,
+          "maxOutputTokens": 64000,
+          "inputCostPerMillion": 15,
+          "outputCostPerMillion": 75,
+          "qualityPrior": 0.97,
+          "latencyPriorMs": 15000,
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}
