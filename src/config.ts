@@ -489,6 +489,16 @@ function assertProjectConfigTrustBoundary(override: Record<string, unknown>): vo
       "Project-local configuration cannot enable raw prompt persistence; use --config or SUPER_ROUTER_CONFIG for trusted configuration",
     );
   }
+  // Turning the redacted audit trail off is authority over evidence rather than a
+  // routing preference. A repository-controlled file could otherwise install
+  // NullTelemetry for every run in that checkout with no warning.
+  const disablesTelemetry = isRecord(override.telemetry) && override.telemetry.enabled === false;
+  const disablesMemory = isRecord(override.memory) && override.memory.enabled === false;
+  if (disablesTelemetry || disablesMemory) {
+    throw new Error(
+      "Project-local configuration cannot disable telemetry or memory; use --config, SUPER_ROUTER_CONFIG, or --no-memory",
+    );
+  }
 }
 
 function mergeConfig(
