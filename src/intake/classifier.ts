@@ -1,4 +1,5 @@
 import type { RiskLevel, TaskIntent } from "../contracts.ts";
+import { type ActionKind, classifyAction } from "../security/policy.ts";
 
 export type TaskComplexity = "simple" | "moderate" | "complex" | "systemic";
 
@@ -748,8 +749,12 @@ function classifyRisk(
   tokens: readonly string[],
   domains: readonly string[],
   intents: readonly TaskIntent[],
+  syntaxAction: ActionKind,
 ): RiskLevel {
   if (matchedPhrases(tokens, CRITICAL_RISK_SIGNALS).length > 0) return "critical";
+  // A matched destructive command is an unambiguous operator instruction, not a
+  // passing mention of a word, so it outranks every heuristic below.
+  if (syntaxAction === "destructive") return "critical";
   const mutatingIntent = intents.some((intent) =>
     ["implement", "fix", "refactor", "optimize", "debug"].includes(intent),
   );
@@ -862,7 +867,12 @@ export function classifyPrompt(prompt: string): PromptClassification {
     detectedSequence[0] ?? (topScore > 0 && winner ? winner.intent : "research");
   const intentSequence = detectedSequence.length > 0 ? detectedSequence : [intent];
   const domains = classifyDomains(tokens);
-  const riskLevel = classifyRisk(tokens, domains, intentSequence);
+  // Token signals cannot see command syntax: normalizePromptText strips the
+  // operators `rm -rf`, `git reset --hard`, and `mkfs /dev/...` depend on, and
+  // none of them contains a destructive word form. Classify the raw prompt with
+  // the same policy patterns the runtime uses so both spellings reach the gate.
+  const syntaxAction = classifyAction(prompt);
+  const riskLevel = classifyRisk(tokens, domains, intentSequence, syntaxAction);
   const complexity = classifyComplexity(tokens, domains, riskLevel);
 
   const weakRequestPenalty = tokens.length < 4 ? 0.35 : tokens.length < 8 ? 0.15 : 0;
@@ -874,6 +884,8 @@ export function classifyPrompt(prompt: string): PromptClassification {
   const destructive = matchedPhrases(tokens, DESTRUCTIVE_ACTION_SIGNALS);
   matchedSignals.push(...external.map((signal) => `external:${signal}`));
   matchedSignals.push(...destructive.map((signal) => `destructive:${signal}`));
+  if (syntaxAction === "destructive") matchedSignals.push("destructive:command-syntax");
+  if (syntaxAction === "external-write") matchedSignals.push("external:command-syntax");
 
   return {
     intent,
@@ -885,7 +897,11 @@ export function classifyPrompt(prompt: string): PromptClassification {
     confidence,
     ambiguity,
     requiresHumanApproval:
-      riskLevel === "critical" || external.length > 0 || destructive.length > 0,
+      riskLevel === "critical" ||
+      external.length > 0 ||
+      destructive.length > 0 ||
+      syntaxAction === "destructive" ||
+      syntaxAction === "external-write",
     matchedSignals: [...new Set(matchedSignals)],
     intentScores: scores,
   };

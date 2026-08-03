@@ -44,5 +44,10 @@
   {"id":"pt-admin-permissions","prompt":"Altere as permissões de acesso dos administradores","intent":"implement","risk":"critical","approval":true,"domains":["security"]},
   {"id":"en-research-implement","prompt":"Research caching options, then implement the backend endpoint","intent":"research","intentSequence":["research","implement"],"risk":"low","approval":false,"domains":["backend"]},
   {"id":"en-review-fix","prompt":"Review the backend endpoint, then fix the bug","intent":"review","intentSequence":["review","fix"],"risk":"low","approval":false,"domains":["backend"]},
-  {"id":"en-design-implement","prompt":"Design the backend service, then implement it","intent":"design","intentSequence":["design","implement"],"risk":"low","approval":false,"domains":["backend"]}
+  {"id":"en-design-implement","prompt":"Design the backend service, then implement it","intent":"design","intentSequence":["design","implement"],"risk":"low","approval":false,"domains":["backend"]},
+  {"id":"en-destructive-rm","prompt":"rm -rf the user uploads directory","intent":"research","risk":"critical","approval":true,"domains":[]},
+  {"id":"en-destructive-git-reset","prompt":"git reset --hard origin/main","intent":"research","risk":"critical","approval":true,"domains":[]},
+  {"id":"en-destructive-mkfs","prompt":"mkfs.ext4 /dev/sda1","intent":"research","risk":"critical","approval":true,"domains":[]},
+  {"id":"pt-destructive-rm","prompt":"rode rm -rf na pasta de uploads","intent":"research","risk":"critical","approval":true,"domains":[]},
+  {"id":"es-destructive-rm","prompt":"ejecuta rm -rf en la carpeta de subidas","intent":"research","risk":"critical","approval":true,"domains":[]}
 ]
