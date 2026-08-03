@@ -339,6 +339,8 @@ export class DagScheduler {
       Math.min(node.maxAttempts, options.budget?.maxAttempts ?? plan.task.budget.maxAttempts),
     );
     const accumulatedUsage = emptyUsage();
+    // Accumulated across attempts so it stays comparable with accumulatedUsage.
+    const accumulatedReservation = { inputTokens: 0, outputTokens: 0, costUsd: 0 };
     const artifacts = new Set<string>();
     let route = baseRoute;
     let lastOutput = "";
@@ -613,6 +615,9 @@ export class DagScheduler {
       const reservation = options.dryRun
         ? { inputTokens: 0, outputTokens: 0, costUsd: 0 }
         : reservationFor(node, route, promptInputTokens);
+      accumulatedReservation.inputTokens += reservation.inputTokens;
+      accumulatedReservation.outputTokens += reservation.outputTokens;
+      accumulatedReservation.costUsd += reservation.costUsd;
       const budgetDecision = ledger.reserve(node.id, reservation, node.maxCostUsd);
       if (!budgetDecision.allowed) {
         await this.#record(
@@ -940,6 +945,7 @@ export class DagScheduler {
             output: lastOutput,
             artifacts: [...artifacts],
             usage: accumulatedUsage,
+            reservedUsage: { ...accumulatedReservation },
             verification,
           };
           await this.#record(
@@ -1968,6 +1974,7 @@ function summarizeStep(step: StepResult): unknown {
     attempt: step.attempt,
     route: step.route,
     usage: step.usage,
+    ...(step.reservedUsage ? { reservedUsage: step.reservedUsage } : {}),
     outputLength: step.output.length,
     artifacts: step.artifacts,
     verificationPassed: step.verification?.passed,

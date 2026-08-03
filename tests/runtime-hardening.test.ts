@@ -534,6 +534,42 @@ describe("runtime budget hardening", () => {
     expect(result.usage.inputTokens).toBe(9_950);
   });
 
+  test("records the reservation beside reported usage so the gap is measurable", async () => {
+    const adapter: ProviderAdapter = {
+      id: "test-provider",
+      isAvailable: async () => true,
+      execute: async () => ({
+        output: "done",
+        artifacts: [],
+        usage: {
+          inputTokens: 5_000,
+          outputTokens: 25,
+          reasoningTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: 0,
+          durationMs: 1,
+        },
+      }),
+    };
+    const events: Array<{ type: string; payload?: unknown }> = [];
+    const result = await new DagScheduler({
+      adapters: [adapter],
+      verifier: passingVerification,
+      telemetry: { record: async (event) => void events.push(event) },
+    }).execute(plan(), process.cwd());
+
+    const step = result.steps[0];
+    expect(step?.state).toBe("verified");
+    expect(step?.reservedUsage?.inputTokens).toBeGreaterThan(0);
+    expect(step?.usage.inputTokens).toBe(5_000);
+    // The reservation covers Super Router's prompt only, so it must be far below
+    // what the provider reported. That difference is the point of recording it.
+    expect(step?.reservedUsage?.inputTokens).toBeLessThan(step?.usage.inputTokens ?? 0);
+
+    const finished = events.find((event) => event.type === "step.finished");
+    expect(finished?.payload).toHaveProperty("reservedUsage");
+  });
+
   test("bounds a telemetry sink that never resolves and continues fail-safe", async () => {
     let availabilityChecks = 0;
     let executions = 0;

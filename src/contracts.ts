@@ -234,6 +234,14 @@ export interface StepResult {
   output: string;
   artifacts: string[];
   usage: UsageRecord;
+  /**
+   * What the runtime reserved before the attempt, kept beside the reported usage
+   * so the estimator's error is measurable rather than invisible. The estimate
+   * covers the prompt Super Router builds; a provider also charges for its own
+   * system prompt, ambient instructions, files read during the turn, and context
+   * resent on later turns, so the two are expected to differ.
+   */
+  reservedUsage?: { inputTokens: number; outputTokens: number; costUsd: number };
   verification?: VerificationResult;
   error?: string;
 }

@@ -180,6 +180,60 @@ describe("local telemetry statistics", () => {
     expect(stats.usage.costUsd).toBe(0);
   });
 
+  test("reports how far the pre-run reservation was from provider-reported usage", async () => {
+    // The estimator measures Super Router's own prompt; the provider also charges
+    // for its system prompt, ambient instructions, files read during the turn, and
+    // context resent on each turn. The gap is only knowable after the fact, so it
+    // has to be recorded to be correctable.
+    const directory = await temporaryDirectory();
+    const telemetry = join(directory, "telemetry");
+    await mkdir(telemetry);
+    const lines = [
+      JSON.stringify({
+        type: "step.finished",
+        payload: {
+          usage: { inputTokens: 30_000, outputTokens: 500 },
+          reservedUsage: { inputTokens: 500, outputTokens: 5_000, costUsd: 0 },
+        },
+      }),
+      JSON.stringify({
+        type: "step.finished",
+        payload: {
+          usage: { inputTokens: 10_000, outputTokens: 500 },
+          reservedUsage: { inputTokens: 500, outputTokens: 5_000, costUsd: 0 },
+        },
+      }),
+    ];
+    await writeFile(join(telemetry, "events-2026-08-03.jsonl"), lines.join("\n"), "utf8");
+
+    const stats = await readTelemetryStats(telemetry);
+    expect(stats.reserved.inputTokens).toBe(1_000);
+    expect(stats.reserved.outputTokens).toBe(10_000);
+    expect(stats.stepUsage.inputTokens).toBe(40_000);
+    expect(stats.stepUsage.outputTokens).toBe(1_000);
+
+    const rendered = renderTelemetryStats(stats);
+    expect(rendered).toContain("Estimate accuracy");
+    // 40,000 actual against 1,000 reserved is 40x under on input.
+    expect(rendered).toMatch(/input=40\.0x under/);
+    // 1,000 actual against 10,000 reserved is 10x over on output.
+    expect(rendered).toMatch(/output=10\.0x over/);
+  });
+
+  test("omits estimate accuracy when no step recorded a reservation", async () => {
+    const directory = await temporaryDirectory();
+    const telemetry = join(directory, "telemetry");
+    await mkdir(telemetry);
+    await writeFile(
+      join(telemetry, "events-2026-08-03.jsonl"),
+      JSON.stringify({ type: "step.finished", payload: { usage: { inputTokens: 10 } } }),
+      "utf8",
+    );
+    const stats = await readTelemetryStats(telemetry);
+    expect(stats.reserved.inputTokens).toBe(0);
+    expect(renderTelemetryStats(stats)).not.toContain("Estimate accuracy");
+  });
+
   test("aggregates validated run events and quarantines malformed lines", async () => {
     const directory = await temporaryDirectory();
     const telemetry = join(directory, "telemetry");
