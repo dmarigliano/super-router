@@ -8,7 +8,38 @@ after the 1.0 release. During `0.x`, minor versions may include breaking changes
 
 ## [Unreleased]
 
-No changes recorded yet.
+### Added
+
+- Estimate accuracy is measured instead of assumed. Each step records its
+  pre-run reservation beside the provider-reported usage, and `stats` prints the
+  ratio per axis. A live three-node read-only Claude Code run reserved 4,152
+  input tokens against 96,123 reported; nothing in the system could previously
+  report that.
+- Reservations are calibrated from that history. After three observations for a
+  provider, later reservations are scaled by the observed input ratio, clamped to
+  a bounded range, so cost and token ceilings bind against realistic figures.
+  Only ratios above 1 are applied, because the reservation is a ceiling and an
+  observed overestimate must not loosen it.
+- A provider attempt is capped at the lower of its node share and the remaining
+  task budget. The ledger already reconciled against reported usage, but only
+  between steps, so a single attempt could overshoot the task ceiling and still
+  complete.
+
+### Fixed
+
+- `ExecutionContext.costCeilingUsd` replaces `step.maxCostUsd` as the source for
+  the Claude Code `--max-budget-usd` argument. The node share was a slice of a
+  plan whose estimates are known to be low.
+
+### Notes
+
+- Calibration narrows the estimator's error and cannot remove it. The estimate
+  covers the prompt Super Router builds, while the provider also charges for its
+  own system prompt, ambient instructions, files read during the turn, and
+  context resent on later turns — a function of agent behaviour at runtime.
+- First live authenticated Claude Code execution through Super Router reached
+  `verified` with all three step checks and task acceptance passing, closing the
+  first item of the `docs/COMPATIBILITY.md` unverified list.
 
 ## [0.8.0] - 2026-08-03
 
